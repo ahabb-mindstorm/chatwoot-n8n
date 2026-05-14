@@ -91,6 +91,28 @@ test("validate accepts top-level Chatwoot message_created customer incoming", ()
   assert.equal(res.data.contactId, 44);
 });
 
+test("validate accepts Chatwoot payload with sender_type Contact", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      body: {
+        event: "message_created",
+        id: 88,
+        content: "yo",
+        message_type: "incoming",
+        sender_type: "Contact",
+        sender_id: 55,
+        account: { id: 1 },
+        conversation: { id: 2, inbox_id: 3 },
+      },
+      headers: {},
+    },
+    {},
+  );
+  assert.equal(res.ok, true);
+  assert.equal(res.data.senderType, "contact");
+  assert.equal(res.data.userText, "yo");
+});
+
 test("validate rejects agent outgoing", () => {
   const res = validateAgentBotEnvelope(
     {

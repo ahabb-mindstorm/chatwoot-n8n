@@ -1,6 +1,6 @@
 # Chatwoot + n8n conversational support bot
 
-Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, routes intent, retrieves FAQ/tool context, asks an AI Agent for strict JSON, applies a deterministic **Safety Gate**, then either **public replies** or **escalates** (labels, private summary, PATCH conversation).
+Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, builds a small knowledge pack, asks an AI Agent to classify intent and choose knowledge, applies a deterministic **Safety Gate**, then either **public replies** or **escalates** (labels, private summary, PATCH conversation).
 
 ## Prerequisites
 
@@ -29,11 +29,13 @@ Populate optional `CHATWOOT_ESCALATION_TEAM_ID` / `CHATWOOT_ESCALATION_ASSIGNEE_
 
 ### AI Agent node
 
-Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent must return strict JSON; the downstream Safety Gate enforces final reply/escalation.
+Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent owns intent classification and FAQ/knowledge selection, then returns strict JSON; the downstream Safety Gate enforces final reply/escalation.
 
 ### FAQ source
 
-Starter FAQ lives in `knowledge/faq.json`. Duplicate content into workflow node **Build Prompt & OpenAI Body** (`faqItems` array); n8n Code nodes cannot read repo files unless you mount them and swap in a filesystem node yourself.
+Starter FAQ lives in `knowledge/faq.json`. Duplicate content into workflow node **Build Knowledge Pack** (`knowledgePack` array); n8n Code nodes cannot read repo files unless you mount them and swap in a filesystem node yourself.
+
+Fast MVP passes the full small FAQ list to the LLM. This is fine while docs are compact. Later, replace **Build Knowledge Pack** with vector retrieval or an AI Agent tool like `search_knowledge_base`.
 
 ### Production notes
 

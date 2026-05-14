@@ -25,13 +25,31 @@ test("workflow contains planned AI Agent and context nodes", () => {
   assert.ok(names.has("Chatwoot Get Conversation"));
   assert.ok(names.has("Chatwoot List Messages"));
   assert.ok(names.has("Chatwoot Get Contact"));
-  assert.ok(names.has("Intent Router"));
-  assert.ok(names.has("Knowledge Retrieval"));
+  assert.ok(names.has("Guardrail Precheck"));
+  assert.ok(names.has("Build Knowledge Pack"));
   assert.ok(names.has("Tool Call Placeholders"));
   assert.ok(names.has("CRM Tool Placeholder"));
   assert.ok(names.has("Order Tool Placeholder"));
   assert.ok(names.has("Status Tool Placeholder"));
   assert.ok(names.has("Failed Turn Tracker"));
+});
+
+test("workflow lets LLM own intent and knowledge selection", () => {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  const workflow = JSON.parse(raw);
+  const guardrail = workflow.nodes.find((node) => node.name === "Guardrail Precheck");
+  const knowledge = workflow.nodes.find((node) => node.name === "Build Knowledge Pack");
+  const agentInput = workflow.nodes.find((node) => node.name === "Build AI Agent Input");
+  const safety = workflow.nodes.find((node) => node.name === "Safety Gate");
+
+  assert.ok(!guardrail.parameters.jsCode.includes("greeting"));
+  assert.ok(!guardrail.parameters.jsCode.includes("support_question"));
+  assert.ok(!knowledge.parameters.jsCode.includes("score ="));
+  assert.ok(knowledge.parameters.jsCode.includes("knowledgePack"));
+  assert.ok(agentInput.parameters.jsCode.includes('"intent"'));
+  assert.ok(agentInput.parameters.jsCode.includes('"knowledge_used"'));
+  assert.ok(!safety.parameters.jsCode.includes("lowKnowledgeMatch"));
+  assert.ok(safety.parameters.jsCode.includes("guardrailRiskFlags"));
 });
 
 test("setup script uses account API by default and platform API as option", () => {
@@ -183,7 +201,7 @@ test("safety escalates low confidence", () => {
   const out = evaluateSafety({
     agent: {
       answer: "ok",
-      confidence: 0.5,
+      confidence: 0.69,
       needs_human: false,
       risk_flags: [],
       labels: [],
@@ -193,6 +211,26 @@ test("safety escalates low confidence", () => {
     httpError: false,
   });
   assert.equal(out.action, "escalate");
+});
+
+test("safety allows confident greeting without knowledge", () => {
+  const out = evaluateSafety({
+    agent: {
+      intent: "greeting",
+      answer: "Hey! How can I help you today?",
+      confidence: 0.9,
+      needs_human: false,
+      risk_flags: [],
+      knowledge_used: [],
+      labels: [],
+      private_summary: "Greeting handled.",
+    },
+    upstream: { accountId: 1 },
+    httpError: false,
+  });
+  assert.equal(out.action, "reply");
+  assert.equal(out.intent, "greeting");
+  assert.deepEqual(out.knowledgeUsed, []);
 });
 
 test("safety replies when safe", () => {

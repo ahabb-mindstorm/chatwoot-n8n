@@ -160,20 +160,20 @@
     },
     {
       "parameters": {
-        "jsCode": "const text = String($json.userText || '').toLowerCase();\nconst flags = [];\nconst labels = [];\nif (/\\b(human|agent|person|representative)\\b/.test(text)) flags.push('human_requested');\nif (/\\b(password|token|secret|api key|credential|ssn|card number)\\b/.test(text)) flags.push('credential_shared');\nif (/\\b(refund|chargeback|dispute|invoice|charged)\\b/.test(text)) { flags.push('billing_dispute'); labels.push('billing'); }\nif (/\\b(lawyer|legal|sue|lawsuit|compliance)\\b/.test(text)) flags.push('legal');\nif (/\\b(security|breach|hacked|vulnerability|data leak)\\b/.test(text)) flags.push('security');\nif (/\\b(delete my data|gdpr|privacy request|erase my data)\\b/.test(text)) flags.push('data_deletion');\nif (/\\b(angry|furious|terrible|worst|unacceptable)\\b/.test(text)) flags.push('angry_customer');\nconst intent = flags.length ? 'escalation_risk' : 'support_question';\nreturn [{ json: { ...$json, intent, intentRiskFlags: flags, intentLabels: labels } }];\n"
+        "jsCode": "const text = String($json.userText || '').toLowerCase();\nconst flags = [];\nconst labels = [];\nif (/\\b(human|agent|person|representative)\\b/.test(text)) flags.push('human_requested');\nif (/\\b(password|token|secret|api key|credential|ssn|card number)\\b/.test(text)) flags.push('credential_shared');\nif (/\\b(refund|chargeback|dispute|invoice|charged)\\b/.test(text)) { flags.push('billing_dispute'); labels.push('billing'); }\nif (/\\b(lawyer|legal|sue|lawsuit|compliance)\\b/.test(text)) flags.push('legal');\nif (/\\b(security|breach|hacked|vulnerability|data leak)\\b/.test(text)) flags.push('security');\nif (/\\b(delete my data|gdpr|privacy request|erase my data)\\b/.test(text)) flags.push('data_deletion');\nreturn [{ json: { ...$json, guardrailRiskFlags: flags, guardrailLabels: labels } }];\n"
       },
       "id": "wf-code-intent",
-      "name": "Intent Router",
+      "name": "Guardrail Precheck",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [-220, 120]
     },
     {
       "parameters": {
-        "jsCode": "const faqItems = [\n  { id: 'reset-password', title: 'Reset password', body: 'Open login page -> Forgot password -> enter email -> follow link. Link expires in 24h. If no email, check spam and allowlist our domain.' },\n  { id: 'billing-portal', title: 'Billing and invoices', body: 'Go to Settings -> Billing to update card, download invoices, or cancel plan. Refunds and disputes need a human agent.' },\n  { id: 'status', title: 'Outage or slowness', body: 'Check status.example.com. If no incident posted, tell us your region and timestamp; we will investigate.' }\n];\nconst text = String($json.userText || '').toLowerCase();\nconst score = (item) => item.title.toLowerCase().split(/\\W+/).filter(Boolean).filter((w) => text.includes(w)).length + item.body.toLowerCase().split(/\\W+/).filter((w) => w.length > 4 && text.includes(w)).length;\nconst matches = faqItems.map((item) => ({ ...item, score: score(item) })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);\nconst knowledgeContext = matches.length ? matches.map((m) => `FAQ ${m.id}: ${m.title}\\n${m.body}`).join('\\n\\n') : 'No FAQ match.';\nreturn [{ json: { ...$json, faqItems, knowledgeMatches: matches, knowledgeContext, lowKnowledgeMatch: matches.length === 0 } }];\n"
+        "jsCode": "const knowledgePack = [\n  { id: 'reset-password', title: 'Reset password', body: 'Open login page -> Forgot password -> enter email -> follow link. Link expires in 24h. If no email, check spam and allowlist our domain.' },\n  { id: 'billing-portal', title: 'Billing and invoices', body: 'Go to Settings -> Billing to update card, download invoices, or cancel plan. Refunds and disputes need a human agent.' },\n  { id: 'status', title: 'Outage or slowness', body: 'Check status.example.com. If no incident posted, tell us your region and timestamp; we will investigate.' }\n];\nconst knowledgeContext = JSON.stringify(knowledgePack, null, 2);\nreturn [{ json: { ...$json, knowledgePack, knowledgeContext } }];\n"
       },
       "id": "wf-code-knowledge",
-      "name": "Knowledge Retrieval",
+      "name": "Build Knowledge Pack",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [0, 120]
@@ -238,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const requiredJson = '{\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'Latest customer message:', $json.userText,\n  '', 'Intent:', $json.intent,\n  'Intent risk flags:', JSON.stringify($json.intentRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'FAQ/Knowledge:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
+        "jsCode": "const requiredJson = '{\"intent\":\"greeting|faq|billing|technical_issue|human_request|legal_security|data_deletion|unknown\",\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"knowledge_used\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'You own intent classification and knowledge selection.',\n  'Choose relevant knowledge ids in knowledge_used. Use [] when none applies.',\n  '', 'Latest customer message:', $json.userText,\n  '', 'Guardrail risk flags:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'Knowledge pack:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
       },
       "id": "wf-code-agent-input",
       "name": "Build AI Agent Input",
@@ -251,7 +251,7 @@
         "promptType": "define",
         "text": "={{ $json.agentPrompt }}",
         "options": {
-          "systemMessage": "You are a customer support AI Agent. Ground answers only in supplied transcript, knowledge, and tool context. If context fetch failed, knowledge is weak, user requests a human, or policy risk exists, set needs_human true. Keep answer under 1200 chars. Risk flags allowed: refund, billing_dispute, legal, security, data_deletion, angry_customer, human_requested, credential_shared, tool_failed, low_knowledge_match, unknown. Return only JSON."
+          "systemMessage": "You are a customer support AI Agent. Classify intent, select relevant knowledge_used ids from the supplied knowledge pack, and answer only from transcript, knowledge, and tool context. If user requests a human or policy risk exists, set needs_human true. If the question is unknown and no knowledge applies, set intent unknown, confidence low, and needs_human true. Greetings/small talk can be answered briefly without knowledge_used. Keep answer under 1200 chars. Risk flags allowed: refund, billing_dispute, legal, security, data_deletion, angry_customer, human_requested, credential_shared, tool_failed, unknown. Return only JSON."
         }
       },
       "id": "wf-ai-agent",
@@ -286,7 +286,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const upstream = $('Parse AI Agent Output').first().json;\nlet agent = upstream.agentOutput || {};\nconst risk = new Set(Array.isArray(agent.risk_flags) ? agent.risk_flags : []);\nfor (const flag of upstream.intentRiskFlags || []) risk.add(flag);\nif (upstream.contextFailed) risk.add('tool_failed');\nif (upstream.lowKnowledgeMatch) risk.add('low_knowledge_match');\nagent = { ...agent, risk_flags: Array.from(risk), labels: Array.from(new Set([...(Array.isArray(agent.labels) ? agent.labels : []), ...(upstream.intentLabels || [])])) };\n\nconst escalationFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','low_knowledge_match','unknown'];\nconst confidence = typeof agent.confidence === 'number' ? agent.confidence : 0;\nconst answer = typeof agent.answer === 'string' ? agent.answer.trim() : '';\nconst risky = agent.risk_flags.some((f) => escalationFlags.includes(f));\nconst shouldEscalate = agent.needs_human === true || confidence < 0.75 || risky || !answer || answer.length > 1200;\nconst action = shouldEscalate ? 'escalate' : 'reply';\nconst summary = typeof agent.private_summary === 'string' && agent.private_summary.trim() ? agent.private_summary.trim() : 'No summary provided by AI Agent.';\nreturn [{ json: { ...upstream, action, confidence, riskFlags: agent.risk_flags, publicAnswer: answer, privateSummary: [summary, `action=${action}`, `confidence=${confidence}`, `risk_flags=${agent.risk_flags.join(',')}`].join(' | '), labelSuggestions: agent.labels } }];\n"
+        "jsCode": "const upstream = $('Parse AI Agent Output').first().json;\nlet agent = upstream.agentOutput || {};\nconst risk = new Set(Array.isArray(agent.risk_flags) ? agent.risk_flags : []);\nfor (const flag of upstream.guardrailRiskFlags || []) risk.add(flag);\nif (upstream.contextFailed) risk.add('tool_failed');\nagent = { ...agent, risk_flags: Array.from(risk), labels: Array.from(new Set([...(Array.isArray(agent.labels) ? agent.labels : []), ...(upstream.guardrailLabels || [])])) };\n\nconst escalationFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','unknown'];\nconst confidence = typeof agent.confidence === 'number' ? agent.confidence : 0;\nconst answer = typeof agent.answer === 'string' ? agent.answer.trim() : '';\nconst risky = agent.risk_flags.some((f) => escalationFlags.includes(f));\nconst shouldEscalate = agent.needs_human === true || confidence < 0.7 || risky || !answer || answer.length > 1200;\nconst action = shouldEscalate ? 'escalate' : 'reply';\nconst summary = typeof agent.private_summary === 'string' && agent.private_summary.trim() ? agent.private_summary.trim() : 'No summary provided by AI Agent.';\nreturn [{ json: { ...upstream, action, intent: agent.intent || 'unknown', confidence, riskFlags: agent.risk_flags, knowledgeUsed: Array.isArray(agent.knowledge_used) ? agent.knowledge_used : [], publicAnswer: answer, privateSummary: [summary, `action=${action}`, `intent=${agent.intent || 'unknown'}`, `confidence=${confidence}`, `risk_flags=${agent.risk_flags.join(',')}`, `knowledge_used=${(Array.isArray(agent.knowledge_used) ? agent.knowledge_used : []).join(',')}`].join(' | '), labelSuggestions: agent.labels } }];\n"
       },
       "id": "wf-code-safety",
       "name": "Safety Gate",
@@ -443,9 +443,9 @@
     "Chatwoot Get Conversation": { "main": [[{ "node": "Chatwoot List Messages", "type": "main", "index": 0 }]] },
     "Chatwoot List Messages": { "main": [[{ "node": "Chatwoot Get Contact", "type": "main", "index": 0 }]] },
     "Chatwoot Get Contact": { "main": [[{ "node": "Build Chatwoot Context", "type": "main", "index": 0 }]] },
-    "Build Chatwoot Context": { "main": [[{ "node": "Intent Router", "type": "main", "index": 0 }]] },
-    "Intent Router": { "main": [[{ "node": "Knowledge Retrieval", "type": "main", "index": 0 }]] },
-    "Knowledge Retrieval": { "main": [[{ "node": "Tool Call Placeholders", "type": "main", "index": 0 }]] },
+    "Build Chatwoot Context": { "main": [[{ "node": "Guardrail Precheck", "type": "main", "index": 0 }]] },
+    "Guardrail Precheck": { "main": [[{ "node": "Build Knowledge Pack", "type": "main", "index": 0 }]] },
+    "Build Knowledge Pack": { "main": [[{ "node": "Tool Call Placeholders", "type": "main", "index": 0 }]] },
     "Tool Call Placeholders": { "main": [[{ "node": "Build AI Agent Input", "type": "main", "index": 0 }]] },
     "Build AI Agent Input": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
     "OpenAI Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },

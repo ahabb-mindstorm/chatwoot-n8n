@@ -113,6 +113,51 @@ test("validate accepts Chatwoot payload with sender_type Contact", () => {
   assert.equal(res.data.userText, "yo");
 });
 
+test("validate accepts actual Chatwoot payload with sender type nested in conversation message", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      body: {
+        account: { id: 2, name: "Mindstormstudios" },
+        content: "hi",
+        conversation: {
+          id: 1,
+          inbox_id: 1,
+          messages: [
+            {
+              id: 166,
+              content: "hi",
+              message_type: 0,
+              private: false,
+              sender_type: "Contact",
+              sender_id: 1,
+              sender: { id: 1, name: "purple-thunder-157", type: "contact" },
+            },
+          ],
+          meta: {
+            sender: { id: 1, name: "purple-thunder-157", type: "contact" },
+          },
+          contact_inbox: { contact_id: 1 },
+        },
+        id: 166,
+        inbox: { id: 1, name: "ProGolf Support" },
+        message_type: "incoming",
+        private: false,
+        sender: { id: 1, name: "purple-thunder-157" },
+        event: "message_created",
+      },
+      headers: {},
+    },
+    {},
+  );
+  assert.equal(res.ok, true);
+  assert.equal(res.data.accountId, 2);
+  assert.equal(res.data.conversationId, 1);
+  assert.equal(res.data.messageId, 166);
+  assert.equal(res.data.userText, "hi");
+  assert.equal(res.data.contactId, 1);
+  assert.equal(res.data.senderType, "contact");
+});
+
 test("validate rejects agent outgoing", () => {
   const res = validateAgentBotEnvelope(
     {

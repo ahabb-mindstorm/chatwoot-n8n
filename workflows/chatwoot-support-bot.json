@@ -1,0 +1,470 @@
+{
+  "name": "Chatwoot Support Bot (Agent Bot webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-support-bot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wf-webhook-chatwoot",
+      "name": "Webhook AgentBot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-2200, 0],
+      "webhookId": "chatwoot-support-bot-ingest",
+      "notesInFlow": true,
+      "notes": "Point Chatwoot Agent Bot outgoing_url here: WEBHOOK_URL/webhook/chatwoot-support-bot."
+    },
+    {
+      "parameters": {
+        "jsCode": "function lowerHeaders(headers) {\n  const result = {};\n  Object.keys(headers || {}).forEach((k) => { result[String(k).toLowerCase()] = headers[k]; });\n  return result;\n}\n\nconst root = $input.first().json;\nconst headers = lowerHeaders(root.headers);\nconst secret = $env.CHATWOOT_WEBHOOK_SECRET;\nif (secret) {\n  const got = headers['x-webhook-secret'] || headers['x-chatwoot-secret'];\n  if (String(got || '') !== String(secret)) return [{ json: { skip: true, reason: 'bad_secret' } }];\n}\n\nconst payload = root.body && typeof root.body === 'object' ? root.body : root;\nif (payload.event !== 'message_created') return [{ json: { skip: true, reason: 'unsupported_event' } }];\n\nconst message = payload.message && typeof payload.message === 'object' ? payload.message : payload;\nconst sender = message.sender || payload.sender || payload.contact || {};\nconst senderType = sender.type || (payload.contact ? 'contact' : undefined);\nconst isContact = senderType === 'contact';\nconst mt = message.message_type ?? payload.message_type;\nconst isIncoming = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\nconst isPrivate = message.private === true || payload.private === true;\nif (isPrivate || !isContact || !isIncoming) return [{ json: { skip: true, reason: 'not_customer_incoming' } }];\n\nconst account = payload.account || {};\nconst conversation = payload.conversation || {};\nconst inbox = payload.inbox || {};\nconst contact = payload.contact || (senderType === 'contact' ? sender : {});\nconst accountId = account.id;\nconst conversationId = conversation.id || conversation.display_id;\nconst messageId = message.id || payload.id;\nconst userText = String(message.content || payload.content || '').trim();\nif (!accountId || !conversationId || !messageId) return [{ json: { skip: true, reason: 'missing_ids' } }];\n\nreturn [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId: contact.id, senderType, rawPayload: payload } }];\n"
+      },
+      "id": "wf-code-validate",
+      "name": "Validate & Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1980, 0],
+      "notesInFlow": true,
+      "notes": "Accepts nested Agent Bot and top-level Chatwoot message_created payloads."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "cond-continue", "leftValue": "={{ $json.skip }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf-if-continue",
+      "name": "Continue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1760, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'skip' }) }}",
+        "options": {}
+      },
+      "id": "wf-respond-skip",
+      "name": "Respond OK (skip)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-1540, -180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.seenMessages) staticData.seenMessages = {};\nif (!staticData.convDebounce) staticData.convDebounce = {};\n\nconst item = $input.first().json;\nconst messageId = String(item.messageId);\nconst convId = String(item.conversationId);\nconst now = Date.now();\nconst windowMs = Number($env.IDEMPOTENCY_WINDOW_MS || 120000);\nconst debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);\nfor (const k of Object.keys(staticData.seenMessages)) {\n  if (now - staticData.seenMessages[k] > windowMs) delete staticData.seenMessages[k];\n}\nif (staticData.seenMessages[messageId]) return [{ json: { ...item, skip: true, reason: 'duplicate_message' } }];\nconst last = staticData.convDebounce[convId] || 0;\nif (now - last < debounceMs) return [{ json: { ...item, skip: true, reason: 'conversation_debounce' } }];\nstaticData.seenMessages[messageId] = now;\nstaticData.convDebounce[convId] = now;\nreturn [{ json: { ...item, skip: false } }];\n"
+      },
+      "id": "wf-code-idempotency",
+      "name": "Idempotency & Debounce",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1540, 80]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "cond-not-dup", "leftValue": "={{ $json.skip }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf-if-not-dup",
+      "name": "Not duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1320, 80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'dup' }) }}",
+        "options": {}
+      },
+      "id": "wf-respond-dup",
+      "name": "Respond OK (dup)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-1100, -120]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $json.accountId + '/conversations/' + $json.conversationId }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-conversation",
+      "name": "Chatwoot Get Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1100, 120],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Idempotency & Debounce').first().json.accountId + '/conversations/' + $('Idempotency & Debounce').first().json.conversationId + '/messages' }}",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "page", "value": "={{ 1 }}" }, { "name": "limit", "value": "={{ 40 }}" }] },
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-messages",
+      "name": "Chatwoot List Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-880, 120],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Idempotency & Debounce').first().json.accountId + '/contacts/' + ($('Idempotency & Debounce').first().json.contactId || 0) }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-contact",
+      "name": "Chatwoot Get Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-660, 120],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "No-op-ish when contactId absent; onError keeps workflow fail-closed downstream."
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Idempotency & Debounce').first().json;\nconst conversation = $('Chatwoot Get Conversation').first().json || {};\nconst messagesResponse = $('Chatwoot List Messages').first().json || {};\nconst contact = $input.first().json || {};\nconst contactFetchFailed = Boolean(base.contactId && contact.error);\nconst contextFailed = Boolean(conversation.error || messagesResponse.error || contactFetchFailed);\n\nconst source = messagesResponse.payload ?? messagesResponse.data ?? messagesResponse;\nlet list = [];\nif (Array.isArray(source)) list = source;\nelse if (Array.isArray(source?.payload)) list = source.payload;\nelse if (Array.isArray(source?.data?.payload)) list = source.data.payload;\n\nconst recent = list.filter((m) => m && String(m.content || '').trim() && m.private !== true && m.private !== 'true').slice(-12);\nconst transcript = recent.map((m) => {\n  const mt = m.message_type;\n  const inbound = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\n  return `${inbound ? 'customer' : 'agent'}: ${String(m.content || '').trim()}`;\n}).join('\\n');\n\nconst labels = conversation.labels || conversation.payload?.labels || [];\nconst customAttributes = conversation.custom_attributes || conversation.payload?.custom_attributes || {};\nconst additionalAttributes = conversation.additional_attributes || conversation.payload?.additional_attributes || {};\nreturn [{ json: { ...base, conversation, contact: base.contactId ? contact : {}, transcript, labels, customAttributes, additionalAttributes, contextFailed } }];\n"
+      },
+      "id": "wf-code-context",
+      "name": "Build Chatwoot Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-440, 120],
+      "notesInFlow": true,
+      "notes": "Loads conversation, recent messages, contact, labels, and attributes."
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = String($json.userText || '').toLowerCase();\nconst flags = [];\nconst labels = [];\nif (/\\b(human|agent|person|representative)\\b/.test(text)) flags.push('human_requested');\nif (/\\b(password|token|secret|api key|credential|ssn|card number)\\b/.test(text)) flags.push('credential_shared');\nif (/\\b(refund|chargeback|dispute|invoice|charged)\\b/.test(text)) { flags.push('billing_dispute'); labels.push('billing'); }\nif (/\\b(lawyer|legal|sue|lawsuit|compliance)\\b/.test(text)) flags.push('legal');\nif (/\\b(security|breach|hacked|vulnerability|data leak)\\b/.test(text)) flags.push('security');\nif (/\\b(delete my data|gdpr|privacy request|erase my data)\\b/.test(text)) flags.push('data_deletion');\nif (/\\b(angry|furious|terrible|worst|unacceptable)\\b/.test(text)) flags.push('angry_customer');\nconst intent = flags.length ? 'escalation_risk' : 'support_question';\nreturn [{ json: { ...$json, intent, intentRiskFlags: flags, intentLabels: labels } }];\n"
+      },
+      "id": "wf-code-intent",
+      "name": "Intent Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-220, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const faqItems = [\n  { id: 'reset-password', title: 'Reset password', body: 'Open login page -> Forgot password -> enter email -> follow link. Link expires in 24h. If no email, check spam and allowlist our domain.' },\n  { id: 'billing-portal', title: 'Billing and invoices', body: 'Go to Settings -> Billing to update card, download invoices, or cancel plan. Refunds and disputes need a human agent.' },\n  { id: 'status', title: 'Outage or slowness', body: 'Check status.example.com. If no incident posted, tell us your region and timestamp; we will investigate.' }\n];\nconst text = String($json.userText || '').toLowerCase();\nconst score = (item) => item.title.toLowerCase().split(/\\W+/).filter(Boolean).filter((w) => text.includes(w)).length + item.body.toLowerCase().split(/\\W+/).filter((w) => w.length > 4 && text.includes(w)).length;\nconst matches = faqItems.map((item) => ({ ...item, score: score(item) })).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);\nconst knowledgeContext = matches.length ? matches.map((m) => `FAQ ${m.id}: ${m.title}\\n${m.body}`).join('\\n\\n') : 'No FAQ match.';\nreturn [{ json: { ...$json, faqItems, knowledgeMatches: matches, knowledgeContext, lowKnowledgeMatch: matches.length === 0 } }];\n"
+      },
+      "id": "wf-code-knowledge",
+      "name": "Knowledge Retrieval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolContext = {\n  crm: 'TODO: replace no-op with CRM HTTP Request node when credentials exist.',\n  order: 'TODO: replace no-op with order/status HTTP Request node when credentials exist.',\n  status: 'TODO: replace no-op with status-page HTTP Request node when credentials exist.'\n};\nreturn [{ json: { ...$json, toolContext } }];\n"
+      },
+      "id": "wf-code-tools",
+      "name": "Tool Call Placeholders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 120],
+      "notesInFlow": true,
+      "notes": "Replace with HTTP Request tool nodes for CRM/order/status APIs."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CRM_API_URL || 'https://example.invalid/crm' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "={{ 'Bearer ' + ($env.CRM_API_TOKEN || '') }}" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-crm-placeholder",
+      "name": "CRM Tool Placeholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -180],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "Enable and connect when CRM credentials/API exist."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ORDER_API_URL || 'https://example.invalid/orders' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "={{ 'Bearer ' + ($env.ORDER_API_TOKEN || '') }}" }] },
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-order-placeholder",
+      "name": "Order Tool Placeholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, -180],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "Enable and connect when order/status credentials/API exist."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.STATUS_API_URL || 'https://example.invalid/status' }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-status-placeholder",
+      "name": "Status Tool Placeholder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -180],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "Enable and connect when status API exists."
+    },
+    {
+      "parameters": {
+        "jsCode": "const requiredJson = '{\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'Latest customer message:', $json.userText,\n  '', 'Intent:', $json.intent,\n  'Intent risk flags:', JSON.stringify($json.intentRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'FAQ/Knowledge:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
+      },
+      "id": "wf-code-agent-input",
+      "name": "Build AI Agent Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 120]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.agentPrompt }}",
+        "options": {
+          "systemMessage": "You are a customer support AI Agent. Ground answers only in supplied transcript, knowledge, and tool context. If context fetch failed, knowledge is weak, user requests a human, or policy risk exists, set needs_human true. Keep answer under 1200 chars. Risk flags allowed: refund, billing_dispute, legal, security, data_deletion, angry_customer, human_requested, credential_shared, tool_failed, low_knowledge_match, unknown. Return only JSON."
+        }
+      },
+      "id": "wf-ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [660, 120],
+      "notesInFlow": true,
+      "notes": "Configure OpenAI credentials after import. Deterministic Safety Gate still owns final decision."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "mode": "id", "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}" },
+        "options": { "temperature": 0.2 }
+      },
+      "id": "wf-openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [660, 360],
+      "credentials": { "openAiApi": { "id": "__REPLACE_ME__", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const upstream = $('Build AI Agent Input').first().json;\nconst res = $input.first().json;\nconst text = res.output || res.text || res.response || res.content || res.json || '';\nlet agent = null;\nlet parseFailed = false;\nif (typeof text === 'object' && text !== null) agent = text;\nelse {\n  try { agent = JSON.parse(String(text).trim().replace(/^```json\\s*|\\s*```$/g, '')); }\n  catch (e) { parseFailed = true; }\n}\nif (parseFailed) agent = { answer: null, confidence: 0, needs_human: true, risk_flags: ['tool_failed'], labels: ['bot_escalated'], private_summary: 'AI Agent returned non-JSON output' };\nreturn [{ json: { ...upstream, agentOutput: agent, agentParseFailed: parseFailed } }];\n"
+      },
+      "id": "wf-code-parse-agent",
+      "name": "Parse AI Agent Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const upstream = $('Parse AI Agent Output').first().json;\nlet agent = upstream.agentOutput || {};\nconst risk = new Set(Array.isArray(agent.risk_flags) ? agent.risk_flags : []);\nfor (const flag of upstream.intentRiskFlags || []) risk.add(flag);\nif (upstream.contextFailed) risk.add('tool_failed');\nif (upstream.lowKnowledgeMatch) risk.add('low_knowledge_match');\nagent = { ...agent, risk_flags: Array.from(risk), labels: Array.from(new Set([...(Array.isArray(agent.labels) ? agent.labels : []), ...(upstream.intentLabels || [])])) };\n\nconst escalationFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','low_knowledge_match','unknown'];\nconst confidence = typeof agent.confidence === 'number' ? agent.confidence : 0;\nconst answer = typeof agent.answer === 'string' ? agent.answer.trim() : '';\nconst risky = agent.risk_flags.some((f) => escalationFlags.includes(f));\nconst shouldEscalate = agent.needs_human === true || confidence < 0.75 || risky || !answer || answer.length > 1200;\nconst action = shouldEscalate ? 'escalate' : 'reply';\nconst summary = typeof agent.private_summary === 'string' && agent.private_summary.trim() ? agent.private_summary.trim() : 'No summary provided by AI Agent.';\nreturn [{ json: { ...upstream, action, confidence, riskFlags: agent.risk_flags, publicAnswer: answer, privateSummary: [summary, `action=${action}`, `confidence=${confidence}`, `risk_flags=${agent.risk_flags.join(',')}`].join(' | '), labelSuggestions: agent.labels } }];\n"
+      },
+      "id": "wf-code-safety",
+      "name": "Safety Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 120],
+      "notesInFlow": true,
+      "notes": "Deterministic gate: confidence, length, risk_flags, needs_human, context/tool failure."
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.failedTurns) staticData.failedTurns = {};\nconst item = $input.first().json;\nconst key = String(item.conversationId);\nconst failed = item.action === 'escalate' || Number(item.confidence || 0) < 0.75;\nconst count = failed ? Number(staticData.failedTurns[key] || 0) + 1 : 0;\nstaticData.failedTurns[key] = count;\nconst forceEscalate = count >= Number($env.FAILED_TURN_THRESHOLD || 2);\nif (forceEscalate && item.action !== 'escalate') {\n  return [{ json: { ...item, action: 'escalate', privateSummary: `${item.privateSummary} | forced_escalation_after_failed_turns=${count}`, labelSuggestions: Array.from(new Set([...(item.labelSuggestions || []), 'repeated_bot_failure'])) } }];\n}\nreturn [{ json: { ...item, failedTurnCount: count } }];\n"
+      },
+      "id": "wf-code-failure-tracker",
+      "name": "Failed Turn Tracker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 120],
+      "notesInFlow": true,
+      "notes": "Escalates after FAILED_TURN_THRESHOLD failed bot turns per conversation."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            { "id": "cond-reply", "leftValue": "={{ $json.action }}", "rightValue": "reply", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf-if-action",
+      "name": "Action is reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1540, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $('Failed Turn Tracker').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-public-reply",
+      "name": "Chatwoot Public Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/labels' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ labels: Array.from(new Set(['bot_escalated', 'n8n_bot'].concat($('Failed Turn Tracker').first().json.labelSuggestions || []))) }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-labels",
+      "name": "Chatwoot Add Labels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 240],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: '[n8n bot v2] ' + $('Failed Turn Tracker').first().json.privateSummary, message_type: 'outgoing', private: true }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-private-note",
+      "name": "Chatwoot Private Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 240],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({}, { status: 'open' }, $env.CHATWOOT_ESCALATION_TEAM_ID ? { team_id: Number($env.CHATWOOT_ESCALATION_TEAM_ID) } : {}, $env.CHATWOOT_ESCALATION_ASSIGNEE_ID ? { assignee_id: Number($env.CHATWOOT_ESCALATION_ASSIGNEE_ID) } : {})) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf-http-patch-conv",
+      "name": "Chatwoot Open + Assign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 240],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Failed Turn Tracker').first().json.action }) }}",
+        "options": {}
+      },
+      "id": "wf-respond-final-main",
+      "name": "Respond OK (handled)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1980, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Failed Turn Tracker').first().json.action }) }}",
+        "options": {}
+      },
+      "id": "wf-respond-final-esc",
+      "name": "Respond OK (escalated)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2420, 240]
+    }
+  ],
+  "connections": {
+    "Webhook AgentBot": { "main": [[{ "node": "Validate & Normalize", "type": "main", "index": 0 }]] },
+    "Validate & Normalize": { "main": [[{ "node": "Continue?", "type": "main", "index": 0 }]] },
+    "Continue?": {
+      "main": [
+        [{ "node": "Idempotency & Debounce", "type": "main", "index": 0 }],
+        [{ "node": "Respond OK (skip)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Idempotency & Debounce": { "main": [[{ "node": "Not duplicate?", "type": "main", "index": 0 }]] },
+    "Not duplicate?": {
+      "main": [
+        [{ "node": "Chatwoot Get Conversation", "type": "main", "index": 0 }],
+        [{ "node": "Respond OK (dup)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Chatwoot Get Conversation": { "main": [[{ "node": "Chatwoot List Messages", "type": "main", "index": 0 }]] },
+    "Chatwoot List Messages": { "main": [[{ "node": "Chatwoot Get Contact", "type": "main", "index": 0 }]] },
+    "Chatwoot Get Contact": { "main": [[{ "node": "Build Chatwoot Context", "type": "main", "index": 0 }]] },
+    "Build Chatwoot Context": { "main": [[{ "node": "Intent Router", "type": "main", "index": 0 }]] },
+    "Intent Router": { "main": [[{ "node": "Knowledge Retrieval", "type": "main", "index": 0 }]] },
+    "Knowledge Retrieval": { "main": [[{ "node": "Tool Call Placeholders", "type": "main", "index": 0 }]] },
+    "Tool Call Placeholders": { "main": [[{ "node": "Build AI Agent Input", "type": "main", "index": 0 }]] },
+    "Build AI Agent Input": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
+    "OpenAI Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "AI Agent": { "main": [[{ "node": "Parse AI Agent Output", "type": "main", "index": 0 }]] },
+    "Parse AI Agent Output": { "main": [[{ "node": "Safety Gate", "type": "main", "index": 0 }]] },
+    "Safety Gate": { "main": [[{ "node": "Failed Turn Tracker", "type": "main", "index": 0 }]] },
+    "Failed Turn Tracker": { "main": [[{ "node": "Action is reply?", "type": "main", "index": 0 }]] },
+    "Action is reply?": {
+      "main": [
+        [{ "node": "Chatwoot Public Reply", "type": "main", "index": 0 }],
+        [{ "node": "Chatwoot Add Labels", "type": "main", "index": 0 }]
+      ]
+    },
+    "Chatwoot Public Reply": { "main": [[{ "node": "Respond OK (handled)", "type": "main", "index": 0 }]] },
+    "Chatwoot Add Labels": { "main": [[{ "node": "Chatwoot Private Note", "type": "main", "index": 0 }]] },
+    "Chatwoot Private Note": { "main": [[{ "node": "Chatwoot Open + Assign", "type": "main", "index": 0 }]] },
+    "Chatwoot Open + Assign": { "main": [[{ "node": "Respond OK (escalated)", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": { "templateId": "chatwoot-support-bot" },
+  "settings": { "executionOrder": "v1" }
+}

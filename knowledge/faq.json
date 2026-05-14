@@ -1,0 +1,17 @@
+[
+  {
+    "id": "reset-password",
+    "title": "Reset password",
+    "body": "Open login page -> Forgot password -> enter email -> follow link. Link expires in 24h. If no email, check spam and allowlist our domain."
+  },
+  {
+    "id": "billing-portal",
+    "title": "Billing and invoices",
+    "body": "Go to Settings -> Billing to update card, download invoices, or cancel plan. Refunds and disputes need a human agent."
+  },
+  {
+    "id": "status",
+    "title": "Outage or slowness",
+    "body": "Check status.example.com. If no incident posted, tell us your region and timestamp; we will investigate."
+  }
+]

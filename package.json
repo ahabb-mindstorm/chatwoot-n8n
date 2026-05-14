@@ -1,0 +1,7 @@
+{
+  "name": "chatwoot-n8n",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/workflow-and-logic.test.mjs"
+  }
+}

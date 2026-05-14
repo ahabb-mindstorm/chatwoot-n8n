@@ -1,0 +1,28 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-0.0.0.0}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-UTC}
+      - TZ=${TZ:-UTC}
+      # Pass through to workflows via $env
+      - CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL}
+      - CHATWOOT_API_ACCESS_TOKEN=${CHATWOOT_API_ACCESS_TOKEN}
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
+      - CHATWOOT_WEBHOOK_SECRET=${CHATWOOT_WEBHOOK_SECRET:-}
+      - CHATWOOT_ESCALATION_TEAM_ID=${CHATWOOT_ESCALATION_TEAM_ID:-}
+      - CHATWOOT_ESCALATION_ASSIGNEE_ID=${CHATWOOT_ESCALATION_ASSIGNEE_ID:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - IDEMPOTENCY_WINDOW_MS=${IDEMPOTENCY_WINDOW_MS:-120000}
+      - CONVERSATION_DEBOUNCE_MS=${CONVERSATION_DEBOUNCE_MS:-2000}
+      - FAILED_TURN_THRESHOLD=${FAILED_TURN_THRESHOLD:-2}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

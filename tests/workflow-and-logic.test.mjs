@@ -34,6 +34,83 @@ test("workflow contains planned AI Agent and context nodes", () => {
   assert.ok(names.has("Failed Turn Tracker"));
 });
 
+test("workflow contains guided flow router, state, and menu nodes", () => {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  const workflow = JSON.parse(raw);
+  const names = new Set(workflow.nodes.map((node) => node.name));
+  const router = workflow.nodes.find((node) => node.name === "Guided Flow Router");
+  const guidedReply = workflow.nodes.find((node) => node.name === "Chatwoot Guided Reply");
+  const directState = workflow.nodes.find((node) => node.name === "Chatwoot Update Guided State");
+  const llmState = workflow.nodes.find((node) => node.name === "Chatwoot Update LLM Guided State");
+
+  assert.ok(names.has("Guided Flow Router"));
+  assert.ok(names.has("Guided action is LLM?"));
+  assert.ok(names.has("Guided action is escalate?"));
+  assert.ok(names.has("Prepare LLM Guided State"));
+  assert.ok(router.parameters.jsCode.includes("n8n_guided_flow"));
+  assert.ok(router.parameters.jsCode.includes("input_select"));
+  assert.ok(router.parameters.jsCode.includes("submitted_values"));
+  assert.ok(router.parameters.jsCode.includes("Ask a custom question"));
+  assert.ok(guidedReply.parameters.jsonBody.includes("guidedMessageBody"));
+  assert.ok(directState.parameters.url.includes("/custom_attributes"));
+  assert.ok(llmState.parameters.url.includes("/custom_attributes"));
+});
+
+test("workflow routes guided custom messages through AI safety path", () => {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  const workflow = JSON.parse(raw);
+  const connections = workflow.connections;
+
+  assert.equal(
+    connections["Build Knowledge Pack"].main[0][0].node,
+    "Guided Flow Router",
+  );
+  assert.equal(
+    connections["Guided action is LLM?"].main[0][0].node,
+    "Tool Call Placeholders",
+  );
+  assert.equal(
+    connections["Guided action is escalate?"].main[0][0].node,
+    "Failed Turn Tracker",
+  );
+  assert.equal(connections["Safety Gate"].main[0][0].node, "Failed Turn Tracker");
+  assert.equal(
+    connections["Failed Turn Tracker"].main[0][0].node,
+    "Prepare LLM Guided State",
+  );
+  assert.equal(
+    connections["Prepare LLM Guided State"].main[0][0].node,
+    "Chatwoot Update LLM Guided State",
+  );
+  assert.equal(
+    connections["Chatwoot Update LLM Guided State"].main[0][0].node,
+    "Action is reply?",
+  );
+});
+
+test("workflow routes direct guided answers through state update and public reply", () => {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  const workflow = JSON.parse(raw);
+  const connections = workflow.connections;
+
+  assert.equal(
+    connections["Guided action is LLM?"].main[1][0].node,
+    "Guided action is escalate?",
+  );
+  assert.equal(
+    connections["Guided action is escalate?"].main[1][0].node,
+    "Chatwoot Update Guided State",
+  );
+  assert.equal(
+    connections["Chatwoot Update Guided State"].main[0][0].node,
+    "Chatwoot Guided Reply",
+  );
+  assert.equal(
+    connections["Chatwoot Guided Reply"].main[0][0].node,
+    "Respond OK (guided)",
+  );
+});
+
 test("workflow lets LLM own intent and knowledge selection", () => {
   const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
   const workflow = JSON.parse(raw);

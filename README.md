@@ -1,6 +1,6 @@
 # Chatwoot + n8n conversational support bot
 
-Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, builds a small knowledge pack, asks an AI Agent to classify intent and choose knowledge, applies a deterministic **Safety Gate**, then either **public replies** or **escalates** (labels, private summary, PATCH conversation).
+Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, shows a guided support menu on first entry, answers known FAQ paths directly, routes custom questions to an AI Agent, applies a deterministic **Safety Gate**, then either **public replies** or **escalates** (labels, private summary, PATCH conversation).
 
 ## Prerequisites
 
@@ -29,7 +29,21 @@ Populate optional `CHATWOOT_ESCALATION_TEAM_ID` / `CHATWOOT_ESCALATION_ASSIGNEE_
 
 ### AI Agent node
 
-Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent owns intent classification and FAQ/knowledge selection, then returns strict JSON; the downstream Safety Gate enforces final reply/escalation.
+Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent handles custom guided-flow questions and returns strict JSON; direct menu FAQ choices are answered deterministically before the LLM. The downstream Safety Gate enforces final reply/escalation.
+
+### Guided support flow
+
+The workflow sends a Chatwoot `input_select` message for the first support menu:
+
+- Reset password
+- Billing and invoices
+- Outage or slowness
+- Ask a custom question
+- Talk to a human
+
+Guided state is stored on the conversation custom attributes under `n8n_guided_flow` via `POST /api/v1/accounts/:account_id/conversations/:conversation_id/custom_attributes`. The router reads `content_attributes.submitted_values` from incoming button/select submissions and also accepts plain text fallback values such as `1`, `billing`, `custom`, `human`, `yes`, `no`, or `menu`.
+
+Known FAQ choices return a public answer and a resolution prompt. `Ask a custom question` moves the conversation into LLM mode. `Talk to a human`, unresolved answers, low confidence, policy risk, malformed AI output, or repeated failed turns use the existing escalation branch.
 
 ### FAQ source
 
@@ -43,7 +57,8 @@ Fast MVP passes the full small FAQ list to the LLM. This is fine while docs are 
 |--------|--------|
 | Idempotency + debounce | `Idempotency & Debounce` node + `$getWorkflowStaticData('global')` |
 | Repeated failed turns | `Failed Turn Tracker` node + `FAILED_TURN_THRESHOLD` |
-| Persistence | Compose volume `n8n_data`; back up `.n8n` dir regularly |
+| Guided-flow state | Chatwoot conversation custom attributes: `n8n_guided_flow` |
+| n8n runtime persistence | Compose volume `n8n_data`; back up `.n8n` dir regularly |
 | Metrics | Subscribe to Chatwoot webhooks separately or scrape n8n execution logs |
 
 ## Scripts
@@ -83,6 +98,7 @@ Manual matrix: [`TESTING.md`](TESTING.md).
 - Labels API 422 → titles must exist beforehand.  
 - Empty transcript → LIST messages query returns different envelope; tweak parsing in Build Prompt Code.  
 - OpenAI refuses JSON → Temperature already low; widen system prompt minimally.  
+- Guided menu not rendering → confirm channel supports Chatwoot `input_select`; text fallback still works if customer sends the option value manually.
 
 ## License
 

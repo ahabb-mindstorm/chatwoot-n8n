@@ -12,7 +12,10 @@
       "name": "Webhook AgentBot",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-2200, 0],
+      "position": [
+        -2200,
+        0
+      ],
       "webhookId": "chatwoot-support-bot-ingest",
       "notesInFlow": true,
       "notes": "Point Chatwoot Agent Bot outgoing_url here: WEBHOOK_URL/webhook/chatwoot-support-bot."
@@ -25,16 +28,32 @@
       "name": "Validate & Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1980, 0],
+      "position": [
+        -1980,
+        0
+      ],
       "notesInFlow": true,
       "notes": "Accepts nested Agent Bot and top-level Chatwoot message_created payloads."
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
           "conditions": [
-            { "id": "cond-continue", "leftValue": "={{ $json.skip }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } }
+            {
+              "id": "cond-continue",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
           ],
           "combinator": "and"
         },
@@ -44,7 +63,10 @@
       "name": "Continue?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1760, 0]
+      "position": [
+        -1760,
+        0
+      ]
     },
     {
       "parameters": {
@@ -56,7 +78,10 @@
       "name": "Respond OK (skip)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-1540, -180]
+      "position": [
+        -1540,
+        -180
+      ]
     },
     {
       "parameters": {
@@ -66,14 +91,30 @@
       "name": "Idempotency & Debounce",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1540, 80]
+      "position": [
+        -1540,
+        80
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
           "conditions": [
-            { "id": "cond-not-dup", "leftValue": "={{ $json.skip }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } }
+            {
+              "id": "cond-not-dup",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
           ],
           "combinator": "and"
         },
@@ -83,7 +124,10 @@
       "name": "Not duplicate?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1320, 80]
+      "position": [
+        -1320,
+        80
+      ]
     },
     {
       "parameters": {
@@ -95,20 +139,35 @@
       "name": "Respond OK (dup)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-1100, -120]
+      "position": [
+        -1100,
+        -120
+      ]
     },
     {
       "parameters": {
         "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $json.accountId + '/conversations/' + $json.conversationId }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
-        "options": { "timeout": 30000 }
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-conversation",
       "name": "Chatwoot Get Conversation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1100, 120],
+      "position": [
+        -1100,
+        120
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
@@ -116,16 +175,39 @@
       "parameters": {
         "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Idempotency & Debounce').first().json.accountId + '/conversations/' + $('Idempotency & Debounce').first().json.conversationId + '/messages' }}",
         "sendQuery": true,
-        "queryParameters": { "parameters": [{ "name": "page", "value": "={{ 1 }}" }, { "name": "limit", "value": "={{ 40 }}" }] },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "={{ 1 }}"
+            },
+            {
+              "name": "limit",
+              "value": "={{ 40 }}"
+            }
+          ]
+        },
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
-        "options": { "timeout": 30000 }
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-messages",
       "name": "Chatwoot List Messages",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-880, 120],
+      "position": [
+        -880,
+        120
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
@@ -133,14 +215,26 @@
       "parameters": {
         "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Idempotency & Debounce').first().json.accountId + '/contacts/' + ($('Idempotency & Debounce').first().json.contactId || 0) }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }] },
-        "options": { "timeout": 30000 }
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-contact",
       "name": "Chatwoot Get Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-660, 120],
+      "position": [
+        -660,
+        120
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "notesInFlow": true,
@@ -154,7 +248,10 @@
       "name": "Build Chatwoot Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-440, 120],
+      "position": [
+        -440,
+        120
+      ],
       "notesInFlow": true,
       "notes": "Loads conversation, recent messages, contact, labels, and attributes."
     },
@@ -166,7 +263,10 @@
       "name": "Guardrail Precheck",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-220, 120]
+      "position": [
+        -220,
+        120
+      ]
     },
     {
       "parameters": {
@@ -176,7 +276,224 @@
       "name": "Build Knowledge Pack",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 120]
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\nconst stateKey = 'n8n_guided_flow';\nconst menuItems = [\n  { title: 'Reset password', value: 'reset_password' },\n  { title: 'Billing and invoices', value: 'billing_portal' },\n  { title: 'Outage or slowness', value: 'status' },\n  { title: 'Ask a custom question', value: 'custom_question' },\n  { title: 'Talk to a human', value: 'talk_to_human' }\n];\nconst resolutionItems = [\n  { title: 'Yes, resolved', value: 'resolved_yes' },\n  { title: 'No, talk to a human', value: 'resolved_no' },\n  { title: 'Ask another question', value: 'custom_question' },\n  { title: 'Show menu again', value: 'show_menu' }\n];\nconst faqMap = {\n  reset_password: { id: 'reset-password', title: 'Reset password' },\n  billing_portal: { id: 'billing-portal', title: 'Billing and invoices' },\n  status: { id: 'status', title: 'Outage or slowness' }\n};\nfunction asObject(value) {\n  if (!value) return {};\n  if (typeof value === 'string') {\n    try { return JSON.parse(value); } catch (e) { return {}; }\n  }\n  return typeof value === 'object' ? value : {};\n}\nfunction submittedValue(payload) {\n  const attrs = payload.message?.content_attributes || payload.content_attributes || {};\n  const submitted = attrs.submitted_values || attrs.submittedValues || payload.submitted_values || [];\n  const first = Array.isArray(submitted) ? submitted[0] : submitted;\n  if (first && typeof first === 'object') return first.value || first.payload || first.name || first.title;\n  if (typeof first === 'string') return first;\n  return '';\n}\nfunction normalizeSelection(raw, text) {\n  const value = String(raw || text || '').trim().toLowerCase();\n  const compact = value.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');\n  if (['1', 'reset', 'reset_password', 'forgot_password', 'password'].includes(compact)) return 'reset_password';\n  if (['2', 'billing', 'billing_portal', 'invoices', 'invoice'].includes(compact)) return 'billing_portal';\n  if (['3', 'status', 'outage', 'slowness'].includes(compact)) return 'status';\n  if (['4', 'custom', 'custom_question', 'ask_a_custom_question', 'question'].includes(compact)) return 'custom_question';\n  if (['5', 'human', 'agent', 'talk_to_human', 'representative'].includes(compact)) return 'talk_to_human';\n  if (['yes', 'y', 'resolved_yes', 'resolved'].includes(compact)) return 'resolved_yes';\n  if (['no', 'n', 'resolved_no', 'unresolved', 'not_resolved'].includes(compact)) return 'resolved_no';\n  if (['menu', 'show_menu', 'start_over', 'restart'].includes(compact)) return 'show_menu';\n  if (/forgot|reset.*password|password.*reset/.test(value)) return 'reset_password';\n  if (/bill|invoice|payment|card|refund|charge/.test(value)) return 'billing_portal';\n  if (/outage|slow|status|down|latency/.test(value)) return 'status';\n  if (/human|agent|person|representative/.test(value)) return 'talk_to_human';\n  return '';\n}\nfunction withState(item, action, nextState, body, extra = {}) {\n  return [{ json: { ...item, guidedAction: action, nextGuidedState: nextState, guidedMessageBody: body, ...extra } }];\n}\nfunction menuBody(content, items = menuItems) {\n  return { content, message_type: 'outgoing', private: false, content_type: 'input_select', content_attributes: { items } };\n}\nfunction nextState(base, patch) {\n  return { ...base, ...patch, updated_at: now };\n}\n\nconst item = $input.first().json;\nconst customAttributes = asObject(item.customAttributes);\nconst guidedState = asObject(customAttributes[stateKey]);\nconst rawPayload = item.rawPayload || {};\nconst submitted = submittedValue(rawPayload);\nconst selection = normalizeSelection(submitted, item.userText);\nconst text = String(item.userText || '').trim();\nconst baseState = { ...guidedState, conversation_id: item.conversationId };\n\nif (selection === 'talk_to_human' || (item.guardrailRiskFlags || []).includes('human_requested')) {\n  const state = nextState(baseState, { mode: 'escalated', step: 'human_requested', selected_option: selection || 'human_requested', resolved: false });\n  return withState(item, 'escalate', state, null, {\n    action: 'escalate',\n    intent: 'human_request',\n    confidence: 1,\n    riskFlags: Array.from(new Set([...(item.guardrailRiskFlags || []), 'human_requested'])),\n    knowledgeUsed: [],\n    publicAnswer: '',\n    labelSuggestions: Array.from(new Set([...(item.guardrailLabels || []), 'guided_flow', 'human_requested'])),\n    privateSummary: `Guided flow handoff requested. selected_option=${selection || 'human_requested'} transcript=${item.transcript || '(empty)'}`\n  });\n}\n\nif (selection === 'resolved_no') {\n  const state = nextState(baseState, { mode: 'escalated', step: 'unresolved_after_guided_answer', selected_option: selection, resolved: false });\n  return withState(item, 'escalate', state, null, {\n    action: 'escalate',\n    intent: 'guided_unresolved',\n    confidence: 1,\n    riskFlags: ['human_requested'],\n    knowledgeUsed: [],\n    publicAnswer: '',\n    labelSuggestions: ['guided_flow', 'guided_unresolved'],\n    privateSummary: `Customer marked guided answer unresolved. previous_option=${guidedState.selected_option || 'unknown'} transcript=${item.transcript || '(empty)'}`\n  });\n}\n\nif (selection === 'resolved_yes') {\n  const state = nextState(baseState, { mode: 'completed', step: 'resolved', selected_option: guidedState.selected_option || selection, resolved: true });\n  return withState(item, 'guided_reply', state, { content: 'Glad I could help. If anything else comes up, send a new message and I will show the support menu again.', message_type: 'outgoing', private: false });\n}\n\nif (selection === 'custom_question') {\n  const state = nextState(baseState, { mode: 'awaiting_custom', step: 'awaiting_custom_question', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'guided_reply', state, { content: 'Please describe the issue in your own words. I will try to help, and I will hand this to a human if we cannot resolve it.', message_type: 'outgoing', private: false });\n}\n\nif (selection === 'show_menu') {\n  const state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false });\n  return withState(item, 'guided_reply', state, menuBody('What can I help you with? Choose an option below.'));\n}\n\nif (guidedState.mode === 'awaiting_custom' && text && !submitted) {\n  const state = nextState(baseState, { mode: 'llm', step: 'llm_support', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'llm', state, null, { guidedState });\n}\n\nif (guidedState.mode === 'llm' && text && !submitted) {\n  const state = nextState(baseState, { mode: 'llm', step: 'llm_support', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'llm', state, null, { guidedState });\n}\n\nif (faqMap[selection]) {\n  const faq = (item.knowledgePack || []).find((entry) => entry.id === faqMap[selection].id);\n  const answer = faq ? faq.body : 'I found that topic, but the answer is not configured yet.';\n  const state = nextState(baseState, { mode: 'awaiting_resolution', step: 'resolution_check', selected_option: selection, resolved: false, knowledge_used: [faqMap[selection].id] });\n  return withState(item, 'guided_reply', state, menuBody(`${faqMap[selection].title}: ${answer}\\n\\nDid this resolve your issue?`, resolutionItems), { knowledgeUsed: [faqMap[selection].id] });\n}\n\nconst greetingOnly = /^(hi|hello|hey|start|help|menu)$/i.test(text) || !text;\nif (!guidedState.mode || guidedState.mode === 'completed' || greetingOnly) {\n  const state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false, llm_turns: 0 });\n  return withState(item, 'guided_reply', state, menuBody('Welcome. What can I help you with? Choose an option below.'));\n}\n\nconst state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false });\nreturn withState(item, 'guided_reply', state, menuBody('I can help route this. Choose an option below, or pick custom question if none fit.'));"
+      },
+      "id": "wf-code-guided-router",
+      "name": "Guided Flow Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        120
+      ],
+      "notesInFlow": true,
+      "notes": "Routes first-entry menu, guided FAQ answers, custom LLM flow, and human handoff using conversation custom attributes."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-guided-llm",
+              "leftValue": "={{ $json.guidedAction }}",
+              "rightValue": "llm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf-if-guided-llm",
+      "name": "Guided action is LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-guided-escalate",
+              "leftValue": "={{ $json.guidedAction }}",
+              "rightValue": "escalate",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf-if-guided-escalate",
+      "name": "Guided action is escalate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Guided Flow Router').first().json.accountId + '/conversations/' + $('Guided Flow Router').first().json.conversationId + '/custom_attributes' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ custom_attributes: Object.assign({}, $('Guided Flow Router').first().json.customAttributes || {}, { n8n_guided_flow: $('Guided Flow Router').first().json.nextGuidedState || {} }) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "wf-http-guided-state-direct",
+      "name": "Chatwoot Update Guided State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -160
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Guided Flow Router').first().json.accountId + '/conversations/' + $('Guided Flow Router').first().json.conversationId + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Guided Flow Router').first().json.guidedMessageBody) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "wf-http-guided-reply",
+      "name": "Chatwoot Guided Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Guided Flow Router').first().json.guidedAction }) }}",
+        "options": {}
+      },
+      "id": "wf-respond-guided",
+      "name": "Respond OK (guided)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\nconst current = item.nextGuidedState || item.guidedState || {};\nconst cameFromLlm = item.guidedAction === 'llm' || current.mode === 'llm' || current.step === 'llm_support';\nconst llmTurns = Number(current.llm_turns || 0) + (cameFromLlm ? 1 : 0);\nconst escalated = item.action === 'escalate';\nconst nextGuidedState = {\n  ...current,\n  mode: escalated ? 'escalated' : 'llm',\n  step: escalated ? (cameFromLlm ? 'llm_escalated' : (current.step || 'guided_escalated')) : 'llm_replied',\n  selected_option: current.selected_option || 'custom_question',\n  llm_turns: llmTurns,\n  resolved: false,\n  updated_at: now\n};\nconst labelSuggestions = Array.from(new Set([...(item.labelSuggestions || []), 'guided_flow']));\nconst privateSummary = [\n  item.privateSummary || 'No summary provided by AI Agent.',\n  `guided_mode=${nextGuidedState.mode}`,\n  `guided_step=${nextGuidedState.step}`,\n  `guided_selected=${nextGuidedState.selected_option}`,\n  `llm_turns=${llmTurns}`\n].join(' | ');\nreturn [{ json: { ...item, nextGuidedState, labelSuggestions, privateSummary, failedTurnCount: item.failedTurnCount } }];\n"
+      },
+      "id": "wf-code-prepare-llm-state",
+      "name": "Prepare LLM Guided State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        120
+      ],
+      "notesInFlow": true,
+      "notes": "Updates guided-flow state after LLM reply/escalation and enriches human handoff summary."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare LLM Guided State').first().json.accountId + '/conversations/' + $('Prepare LLM Guided State').first().json.conversationId + '/custom_attributes' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ custom_attributes: Object.assign({}, $('Prepare LLM Guided State').first().json.customAttributes || {}, { n8n_guided_flow: $('Prepare LLM Guided State').first().json.nextGuidedState || {} }) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "wf-http-guided-state-llm",
+      "name": "Chatwoot Update LLM Guided State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -186,7 +503,10 @@
       "name": "Tool Call Placeholders",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 120],
+      "position": [
+        660,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Replace with HTTP Request tool nodes for CRM/order/status APIs."
     },
@@ -194,14 +514,26 @@
       "parameters": {
         "url": "={{ $env.CRM_API_URL || 'https://example.invalid/crm' }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "={{ 'Bearer ' + ($env.CRM_API_TOKEN || '') }}" }] },
-        "options": { "timeout": 30000 }
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + ($env.CRM_API_TOKEN || '') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-crm-placeholder",
       "name": "CRM Tool Placeholder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -180],
+      "position": [
+        220,
+        -180
+      ],
       "disabled": true,
       "notesInFlow": true,
       "notes": "Enable and connect when CRM credentials/API exist."
@@ -210,14 +542,26 @@
       "parameters": {
         "url": "={{ $env.ORDER_API_URL || 'https://example.invalid/orders' }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "={{ 'Bearer ' + ($env.ORDER_API_TOKEN || '') }}" }] },
-        "options": { "timeout": 30000 }
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + ($env.ORDER_API_TOKEN || '') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-order-placeholder",
       "name": "Order Tool Placeholder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, -180],
+      "position": [
+        440,
+        -180
+      ],
       "disabled": true,
       "notesInFlow": true,
       "notes": "Enable and connect when order/status credentials/API exist."
@@ -225,26 +569,34 @@
     {
       "parameters": {
         "url": "={{ $env.STATUS_API_URL || 'https://example.invalid/status' }}",
-        "options": { "timeout": 30000 }
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-status-placeholder",
       "name": "Status Tool Placeholder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, -180],
+      "position": [
+        660,
+        -180
+      ],
       "disabled": true,
       "notesInFlow": true,
       "notes": "Enable and connect when status API exists."
     },
     {
       "parameters": {
-        "jsCode": "const requiredJson = '{\"intent\":\"greeting|faq|billing|technical_issue|human_request|legal_security|data_deletion|unknown\",\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"knowledge_used\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'You own intent classification and knowledge selection.',\n  'Choose relevant knowledge ids in knowledge_used. Use [] when none applies.',\n  '', 'Latest customer message:', $json.userText,\n  '', 'Guardrail risk flags:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'Knowledge pack:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
+        "jsCode": "const requiredJson = '{\"intent\":\"greeting|faq|billing|technical_issue|human_request|legal_security|data_deletion|unknown\",\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"knowledge_used\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst guided = $json.nextGuidedState || $json.guidedState || {};\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'You own intent classification and knowledge selection.',\n  'Choose relevant knowledge ids in knowledge_used. Use [] when none applies.',\n  'This conversation is in guided custom-support mode when guided.mode is llm or awaiting_custom.',\n  '', 'Latest customer message:', $json.userText,\n  '', 'Guided flow state:', JSON.stringify(guided),\n  'Guardrail risk flags:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'Knowledge pack:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
       },
       "id": "wf-code-agent-input",
       "name": "Build AI Agent Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 120]
+      "position": [
+        880,
+        220
+      ]
     },
     {
       "parameters": {
@@ -258,21 +610,38 @@
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
-      "position": [660, 120],
+      "position": [
+        1100,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Configure OpenAI credentials after import. Deterministic Safety Gate still owns final decision."
     },
     {
       "parameters": {
-        "model": { "__rl": true, "mode": "id", "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}" },
-        "options": { "temperature": 0.2 }
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}"
+        },
+        "options": {
+          "temperature": 0.2
+        }
       },
       "id": "wf-openai-model",
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
-      "position": [660, 360],
-      "credentials": { "openAiApi": { "id": "__REPLACE_ME__", "name": "OpenAI account" } }
+      "position": [
+        1100,
+        460
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "__REPLACE_ME__",
+          "name": "OpenAI account"
+        }
+      }
     },
     {
       "parameters": {
@@ -282,7 +651,10 @@
       "name": "Parse AI Agent Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 120]
+      "position": [
+        1320,
+        220
+      ]
     },
     {
       "parameters": {
@@ -292,7 +664,10 @@
       "name": "Safety Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 120],
+      "position": [
+        1540,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Deterministic gate: confidence, length, risk_flags, needs_human, context/tool failure."
     },
@@ -304,16 +679,32 @@
       "name": "Failed Turn Tracker",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 120],
+      "position": [
+        1760,
+        220
+      ],
       "notesInFlow": true,
       "notes": "Escalates after FAILED_TURN_THRESHOLD failed bot turns per conversation."
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
           "conditions": [
-            { "id": "cond-reply", "leftValue": "={{ $json.action }}", "rightValue": "reply", "operator": { "type": "string", "operation": "equals" } }
+            {
+              "id": "cond-reply",
+              "leftValue": "={{ $('Prepare LLM Guided State').first().json.action }}",
+              "rightValue": "reply",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
           ],
           "combinator": "and"
         },
@@ -323,148 +714,552 @@
       "name": "Action is reply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [1540, 120]
+      "position": [
+        1980,
+        120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/messages' }}",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare LLM Guided State').first().json.accountId + '/conversations/' + $('Prepare LLM Guided State').first().json.conversationId + '/messages' }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: $('Failed Turn Tracker').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
-        "options": { "timeout": 30000 }
+        "jsonBody": "={{ JSON.stringify({ content: $('Prepare LLM Guided State').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-public-reply",
       "name": "Chatwoot Public Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 0]
+      "position": [
+        2200,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/labels' }}",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare LLM Guided State').first().json.accountId + '/conversations/' + $('Prepare LLM Guided State').first().json.conversationId + '/labels' }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ labels: Array.from(new Set(['bot_escalated', 'n8n_bot'].concat($('Failed Turn Tracker').first().json.labelSuggestions || []))) }) }}",
-        "options": { "timeout": 30000 }
+        "jsonBody": "={{ JSON.stringify({ labels: Array.from(new Set(['bot_escalated', 'n8n_bot'].concat($('Prepare LLM Guided State').first().json.labelSuggestions || []))) }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-labels",
       "name": "Chatwoot Add Labels",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 240],
+      "position": [
+        2200,
+        240
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId + '/messages' }}",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare LLM Guided State').first().json.accountId + '/conversations/' + $('Prepare LLM Guided State').first().json.conversationId + '/messages' }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: '[n8n bot v2] ' + $('Failed Turn Tracker').first().json.privateSummary, message_type: 'outgoing', private: true }) }}",
-        "options": { "timeout": 30000 }
+        "jsonBody": "={{ JSON.stringify({ content: '[n8n bot v2] ' + $('Prepare LLM Guided State').first().json.privateSummary, message_type: 'outgoing', private: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-private-note",
       "name": "Chatwoot Private Note",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1980, 240],
+      "position": [
+        2420,
+        240
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Failed Turn Tracker').first().json.accountId + '/conversations/' + $('Failed Turn Tracker').first().json.conversationId }}",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare LLM Guided State').first().json.accountId + '/conversations/' + $('Prepare LLM Guided State').first().json.conversationId }}",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "api_access_token", "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify(Object.assign({}, { status: 'open' }, $env.CHATWOOT_ESCALATION_TEAM_ID ? { team_id: Number($env.CHATWOOT_ESCALATION_TEAM_ID) } : {}, $env.CHATWOOT_ESCALATION_ASSIGNEE_ID ? { assignee_id: Number($env.CHATWOOT_ESCALATION_ASSIGNEE_ID) } : {})) }}",
-        "options": { "timeout": 30000 }
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "wf-http-patch-conv",
       "name": "Chatwoot Open + Assign",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2200, 240],
+      "position": [
+        2640,
+        240
+      ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Failed Turn Tracker').first().json.action }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Prepare LLM Guided State').first().json.action }) }}",
         "options": {}
       },
       "id": "wf-respond-final-main",
       "name": "Respond OK (handled)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1980, 0]
+      "position": [
+        2420,
+        0
+      ]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Failed Turn Tracker').first().json.action }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, action: $('Prepare LLM Guided State').first().json.action }) }}",
         "options": {}
       },
       "id": "wf-respond-final-esc",
       "name": "Respond OK (escalated)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2420, 240]
+      "position": [
+        2860,
+        240
+      ]
     }
   ],
   "connections": {
-    "Webhook AgentBot": { "main": [[{ "node": "Validate & Normalize", "type": "main", "index": 0 }]] },
-    "Validate & Normalize": { "main": [[{ "node": "Continue?", "type": "main", "index": 0 }]] },
+    "Webhook AgentBot": {
+      "main": [
+        [
+          {
+            "node": "Validate & Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Normalize": {
+      "main": [
+        [
+          {
+            "node": "Continue?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Continue?": {
       "main": [
-        [{ "node": "Idempotency & Debounce", "type": "main", "index": 0 }],
-        [{ "node": "Respond OK (skip)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Idempotency & Debounce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Idempotency & Debounce": { "main": [[{ "node": "Not duplicate?", "type": "main", "index": 0 }]] },
+    "Idempotency & Debounce": {
+      "main": [
+        [
+          {
+            "node": "Not duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Not duplicate?": {
       "main": [
-        [{ "node": "Chatwoot Get Conversation", "type": "main", "index": 0 }],
-        [{ "node": "Respond OK (dup)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Chatwoot Get Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (dup)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Chatwoot Get Conversation": { "main": [[{ "node": "Chatwoot List Messages", "type": "main", "index": 0 }]] },
-    "Chatwoot List Messages": { "main": [[{ "node": "Chatwoot Get Contact", "type": "main", "index": 0 }]] },
-    "Chatwoot Get Contact": { "main": [[{ "node": "Build Chatwoot Context", "type": "main", "index": 0 }]] },
-    "Build Chatwoot Context": { "main": [[{ "node": "Guardrail Precheck", "type": "main", "index": 0 }]] },
-    "Guardrail Precheck": { "main": [[{ "node": "Build Knowledge Pack", "type": "main", "index": 0 }]] },
-    "Build Knowledge Pack": { "main": [[{ "node": "Tool Call Placeholders", "type": "main", "index": 0 }]] },
-    "Tool Call Placeholders": { "main": [[{ "node": "Build AI Agent Input", "type": "main", "index": 0 }]] },
-    "Build AI Agent Input": { "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]] },
-    "OpenAI Chat Model": { "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]] },
-    "AI Agent": { "main": [[{ "node": "Parse AI Agent Output", "type": "main", "index": 0 }]] },
-    "Parse AI Agent Output": { "main": [[{ "node": "Safety Gate", "type": "main", "index": 0 }]] },
-    "Safety Gate": { "main": [[{ "node": "Failed Turn Tracker", "type": "main", "index": 0 }]] },
-    "Failed Turn Tracker": { "main": [[{ "node": "Action is reply?", "type": "main", "index": 0 }]] },
+    "Chatwoot Get Conversation": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot List Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot List Messages": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Get Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Get Contact": {
+      "main": [
+        [
+          {
+            "node": "Build Chatwoot Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Chatwoot Context": {
+      "main": [
+        [
+          {
+            "node": "Guardrail Precheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail Precheck": {
+      "main": [
+        [
+          {
+            "node": "Build Knowledge Pack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Knowledge Pack": {
+      "main": [
+        [
+          {
+            "node": "Guided Flow Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool Call Placeholders": {
+      "main": [
+        [
+          {
+            "node": "Build AI Agent Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Agent Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Agent Output": {
+      "main": [
+        [
+          {
+            "node": "Safety Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Gate": {
+      "main": [
+        [
+          {
+            "node": "Failed Turn Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed Turn Tracker": {
+      "main": [
+        [
+          {
+            "node": "Prepare LLM Guided State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Action is reply?": {
       "main": [
-        [{ "node": "Chatwoot Public Reply", "type": "main", "index": 0 }],
-        [{ "node": "Chatwoot Add Labels", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Chatwoot Public Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chatwoot Add Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Chatwoot Public Reply": { "main": [[{ "node": "Respond OK (handled)", "type": "main", "index": 0 }]] },
-    "Chatwoot Add Labels": { "main": [[{ "node": "Chatwoot Private Note", "type": "main", "index": 0 }]] },
-    "Chatwoot Private Note": { "main": [[{ "node": "Chatwoot Open + Assign", "type": "main", "index": 0 }]] },
-    "Chatwoot Open + Assign": { "main": [[{ "node": "Respond OK (escalated)", "type": "main", "index": 0 }]] }
+    "Chatwoot Public Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (handled)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Add Labels": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Private Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Private Note": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Open + Assign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Open + Assign": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (escalated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guided Flow Router": {
+      "main": [
+        [
+          {
+            "node": "Guided action is LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guided action is LLM?": {
+      "main": [
+        [
+          {
+            "node": "Tool Call Placeholders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guided action is escalate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guided action is escalate?": {
+      "main": [
+        [
+          {
+            "node": "Failed Turn Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chatwoot Update Guided State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Update Guided State": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Guided Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Guided Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (guided)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare LLM Guided State": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Update LLM Guided State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Update LLM Guided State": {
+      "main": [
+        [
+          {
+            "node": "Action is reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "pinData": {},
-  "meta": { "templateId": "chatwoot-support-bot" },
-  "settings": { "executionOrder": "v1" }
+  "meta": {
+    "templateId": "chatwoot-support-bot"
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

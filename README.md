@@ -1,6 +1,6 @@
 # Chatwoot + n8n conversational support bot
 
-Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, shows a guided support menu on first entry, answers known FAQ paths directly, routes custom questions to an AI Agent, applies a deterministic **Safety Gate**, then either **public replies** or **escalates** (labels, private summary, PATCH conversation).
+Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes payloads, loads Chatwoot context, fetches a JSON guided-flow tree, renders Chatwoot options/forms/text from that tree, routes custom questions to an AI Agent, applies a deterministic **Safety Gate**, then either **public replies** or **hands off** (labels, private summary, PATCH conversation).
 
 ## Prerequisites
 
@@ -23,27 +23,55 @@ Self-hosted Chatwoot **Agent Bot** posts `message_created` webhooks into n8n. n8
 
 Set `CHATWOOT_WEBHOOK_SECRET` in `.env` and terminate TLS in front of n8n with a tiny proxy that injects `X-Webhook-Secret` on allowed paths. Chatwoot cannot set arbitrary headers natively — only use where you terminate webhooks behind your edge.
 
-### Escalation routing
+### Handoff routing
 
 Populate optional `CHATWOOT_ESCALATION_TEAM_ID` / `CHATWOOT_ESCALATION_ASSIGNEE_ID` for PATCH assigns.
 
 ### AI Agent node
 
-Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent handles custom guided-flow questions and returns strict JSON; direct menu FAQ choices are answered deterministically before the LLM. The downstream Safety Gate enforces final reply/escalation.
+Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentials in n8n after import. The Agent handles guided-flow `llm` nodes and returns strict JSON; direct `text`, `options`, and `form` nodes are handled before the LLM. The downstream Safety Gate enforces final reply/handoff.
 
 ### Guided support flow
 
-The workflow sends a Chatwoot `input_select` message for the first support menu:
+The workflow uses **Fetch Guided Flow** as a temporary API stand-in. It returns a static JSON tree shaped like the future portal/API response. Replace this Code node with an HTTP Request later, as long as the router still receives `guidedFlow`.
 
-- Reset password
-- Billing and invoices
-- Outage or slowness
-- Ask a custom question
-- Talk to a human
+Flow schema:
 
-Guided state is stored on the conversation custom attributes under `n8n_guided_flow` via `POST /api/v1/accounts/:account_id/conversations/:conversation_id/custom_attributes`. The router reads `content_attributes.submitted_values` from incoming button/select submissions and also accepts plain text fallback values such as `1`, `billing`, `custom`, `human`, `yes`, `no`, or `menu`.
+```json
+{
+  "version": 1,
+  "entry": "main",
+  "nodes": {
+    "main": {
+      "type": "options",
+      "prompt": "What can I help you with?",
+      "options": [
+        { "id": "lost_reward", "text": "Lost Reward", "target": "lost_reward_form" }
+      ]
+    },
+    "lost_reward_form": {
+      "type": "form",
+      "prompt": "Tell us about the lost reward.",
+      "fields": [
+        { "id": "lost_location", "label": "Where did you lose it?", "type": "text", "required": true }
+      ],
+      "submitTarget": "human"
+    }
+  }
+}
+```
 
-Known FAQ choices return a public answer and a resolution prompt. `Ask a custom question` moves the conversation into LLM mode. `Talk to a human`, unresolved answers, low confidence, policy risk, malformed AI output, or repeated failed turns use the existing escalation branch.
+Supported node types:
+
+- `options` renders Chatwoot `input_select`.
+- `form` renders Chatwoot `form`.
+- `text` renders a public message, or text plus the next options node when `next` points to `options`.
+- `llm` enters the AI Agent path.
+- `human` enters the handoff path.
+
+Guided state is stored on conversation custom attributes under `n8n_guided_flow` via `POST /api/v1/accounts/:account_id/conversations/:conversation_id/custom_attributes`. State includes `flow_version`, `current_node`, `path`, `form_data`, `last_action`, and `updated_at`.
+
+The router reads `content_attributes.submitted_values` from Chatwoot `input_select` and `form` submissions. It also accepts plain text fallback values that match current option IDs or labels.
 
 ### FAQ source
 
@@ -58,6 +86,7 @@ Fast MVP passes the full small FAQ list to the LLM. This is fine while docs are 
 | Idempotency + debounce | `Idempotency & Debounce` node + `$getWorkflowStaticData('global')` |
 | Repeated failed turns | `Failed Turn Tracker` node + `FAILED_TURN_THRESHOLD` |
 | Guided-flow state | Chatwoot conversation custom attributes: `n8n_guided_flow` |
+| Guided-flow source | `Fetch Guided Flow` Code node; replace later with API HTTP Request |
 | n8n runtime persistence | Compose volume `n8n_data`; back up `.n8n` dir regularly |
 | Metrics | Subscribe to Chatwoot webhooks separately or scrape n8n execution logs |
 
@@ -83,12 +112,52 @@ export CHATWOOT_PLATFORM_ACCESS_TOKEN=platform-token
 bash scripts/setup-agent-bot.sh
 ```
 
+## RAG guided bot (Pinecone)
+
+Separate workflow: `workflows/chatwoot-rag-guided-bot.json`.
+
+1. Import and activate it in n8n (in addition to or instead of the static guided bot).
+2. Configure **OpenAI** and **Pinecone** credentials on **Embeddings OpenAI**, **Pinecone Vector Store**, and **OpenAI Chat Model** nodes.
+3. Set `PINECONE_INDEX`, optional `PINECONE_NAMESPACE`, `RAG_TOP_K`, `RAG_MIN_SCORE`, and `OPENAI_EMBEDDING_MODEL` in `.env` (embedding model must match what you used when uploading vectors).
+4. Populate the index from [`rag/`](rag/):
+
+```bash
+# Requires OPENAI_API_KEY and PINECONE_API_KEY in .env
+npm install
+npm run rag:upsert
+```
+
+Creates the index if missing (default name `pro-golf-support`), chunks each doc on `##` headings, embeds with `OPENAI_EMBEDDING_MODEL`, and upserts with planner metadata (`doc_id`, `topic`, `game_contexts`, `tips`, etc.). Use `npm run rag:upsert -- --recreate` to delete and recreate the index.
+
+5. Point a Chatwoot Agent Bot `outgoing_url` to `{WEBHOOK_URL}webhook/chatwoot-rag-guided-bot`.
+
+Each customer message: embed query → Pinecone top-k → **Flow Planner** JSON (prompt, `input_select` options, tips) → public reply, or handoff when retrieval score is below `RAG_MIN_SCORE` or the planner marks `in_scope: false`.
+
+### Pinecone document metadata (recommended)
+
+When you upload support articles to Pinecone, include metadata the planner can use for game-specific options:
+
+```json
+{
+  "doc_id": "lost-reward-overview",
+  "topic": "lost_reward",
+  "title": "Lost reward",
+  "body": "Full troubleshooting text...",
+  "game_contexts": ["main_screen", "tournament", "daily_challenge"],
+  "tips": ["Check reward inbox", "Force-close and reopen"]
+}
+```
+
+Guided state is stored on the conversation under custom attribute `n8n_guided_flow` (`flow_version: 2`, `mode: rag_guided`).
+
+Logic mirrors [`lib/ragScope.mjs`](lib/ragScope.mjs) and [`lib/flowPlanner.mjs`](lib/flowPlanner.mjs).
+
 ## Tests
 
 Requires Node ≥18:
 
 ```bash
-node --test tests/workflow-and-logic.test.mjs
+npm test
 ```
 
 Manual matrix: [`TESTING.md`](TESTING.md).
@@ -99,6 +168,8 @@ Manual matrix: [`TESTING.md`](TESTING.md).
 - Empty transcript → LIST messages query returns different envelope; tweak parsing in Build Prompt Code.  
 - OpenAI refuses JSON → Temperature already low; widen system prompt minimally.  
 - Guided menu not rendering → confirm channel supports Chatwoot `input_select`; text fallback still works if customer sends the option value manually.
+- Guided form not rendering → confirm channel supports Chatwoot `form`; web widget is the safest target.
+- Flow route fails → check `Fetch Guided Flow` has valid `entry`, `nodes`, and targets that exist.
 
 ## License
 

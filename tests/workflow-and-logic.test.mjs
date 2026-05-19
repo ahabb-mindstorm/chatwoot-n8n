@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import vm from "node:vm";
 
 import { evaluateSafety, nextFailureState } from "../lib/safetyGate.mjs";
 import { validateAgentBotEnvelope } from "../lib/webhookValidate.mjs";
@@ -10,9 +11,39 @@ import { validateAgentBotEnvelope } from "../lib/webhookValidate.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
 
+function loadWorkflow() {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  return JSON.parse(raw);
+}
+
+async function runCodeNode(workflow, nodeName, item) {
+  const node = workflow.nodes.find((candidate) => candidate.name === nodeName);
+  assert.ok(node, `${nodeName} node exists`);
+  const code = node.parameters?.jsCode;
+  assert.ok(code, `${nodeName} has jsCode`);
+  const script = new vm.Script(`(async () => {\n${code}\n})()`);
+  return script.runInNewContext({
+    $input: { first: () => ({ json: item }) },
+    $json: item,
+  });
+}
+
 test("workflow JSON parses", () => {
   const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
   JSON.parse(raw);
+});
+
+test("workflow Code node JavaScript compiles", () => {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
+  const workflow = JSON.parse(raw);
+  for (const node of workflow.nodes) {
+    const code = node.parameters?.jsCode;
+    if (!code) continue;
+    assert.doesNotThrow(
+      () => new vm.Script(`(async () => {\n${code}\n})()`),
+      `${node.name} should compile`,
+    );
+  }
 });
 
 test("workflow contains planned AI Agent and context nodes", () => {
@@ -38,19 +69,32 @@ test("workflow contains guided flow router, state, and menu nodes", () => {
   const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
   const workflow = JSON.parse(raw);
   const names = new Set(workflow.nodes.map((node) => node.name));
+  const flow = workflow.nodes.find((node) => node.name === "Fetch Guided Flow");
   const router = workflow.nodes.find((node) => node.name === "Guided Flow Router");
+  const idempotency = workflow.nodes.find((node) => node.name === "Idempotency & Debounce");
   const guidedReply = workflow.nodes.find((node) => node.name === "Chatwoot Guided Reply");
   const directState = workflow.nodes.find((node) => node.name === "Chatwoot Update Guided State");
   const llmState = workflow.nodes.find((node) => node.name === "Chatwoot Update LLM Guided State");
 
+  assert.ok(names.has("Fetch Guided Flow"));
   assert.ok(names.has("Guided Flow Router"));
   assert.ok(names.has("Guided action is LLM?"));
-  assert.ok(names.has("Guided action is escalate?"));
+  assert.ok(names.has("Guided action is handoff?"));
   assert.ok(names.has("Prepare LLM Guided State"));
+  assert.ok(flow.parameters.jsCode.includes("guidedFlow"));
+  assert.ok(flow.parameters.jsCode.includes("lost_reward_form"));
+  assert.ok(flow.parameters.jsCode.includes("withdrawal_menu"));
+  assert.ok(flow.parameters.jsCode.includes("Please describe the issue in your own words"));
   assert.ok(router.parameters.jsCode.includes("n8n_guided_flow"));
   assert.ok(router.parameters.jsCode.includes("input_select"));
+  assert.ok(router.parameters.jsCode.includes("content_type: 'form'"));
   assert.ok(router.parameters.jsCode.includes("submitted_values"));
-  assert.ok(router.parameters.jsCode.includes("Ask a custom question"));
+  assert.ok(router.parameters.jsCode.includes("flow.nodes"));
+  assert.ok(router.parameters.jsCode.includes("enteringFromSelection"));
+  assert.ok(router.parameters.jsCode.indexOf("greetingOnly) return renderNode(flow.entry") < router.parameters.jsCode.indexOf("currentNode?.type === 'llm'"));
+  assert.ok(!router.parameters.jsCode.includes("faqMap"));
+  assert.ok(!router.parameters.jsCode.includes("Reset password"));
+  assert.ok(idempotency.parameters.jsCode.includes("isInteractiveSubmission"));
   assert.ok(guidedReply.parameters.jsonBody.includes("guidedMessageBody"));
   assert.ok(directState.parameters.url.includes("/custom_attributes"));
   assert.ok(llmState.parameters.url.includes("/custom_attributes"));
@@ -63,6 +107,10 @@ test("workflow routes guided custom messages through AI safety path", () => {
 
   assert.equal(
     connections["Build Knowledge Pack"].main[0][0].node,
+    "Fetch Guided Flow",
+  );
+  assert.equal(
+    connections["Fetch Guided Flow"].main[0][0].node,
     "Guided Flow Router",
   );
   assert.equal(
@@ -70,7 +118,7 @@ test("workflow routes guided custom messages through AI safety path", () => {
     "Tool Call Placeholders",
   );
   assert.equal(
-    connections["Guided action is escalate?"].main[0][0].node,
+    connections["Guided action is handoff?"].main[0][0].node,
     "Failed Turn Tracker",
   );
   assert.equal(connections["Safety Gate"].main[0][0].node, "Failed Turn Tracker");
@@ -95,10 +143,10 @@ test("workflow routes direct guided answers through state update and public repl
 
   assert.equal(
     connections["Guided action is LLM?"].main[1][0].node,
-    "Guided action is escalate?",
+    "Guided action is handoff?",
   );
   assert.equal(
-    connections["Guided action is escalate?"].main[1][0].node,
+    connections["Guided action is handoff?"].main[1][0].node,
     "Chatwoot Update Guided State",
   );
   assert.equal(
@@ -109,6 +157,86 @@ test("workflow routes direct guided answers through state update and public repl
     connections["Chatwoot Guided Reply"].main[0][0].node,
     "Respond OK (guided)",
   );
+});
+
+test("guided custom selection prompts for the user question before invoking AI", async () => {
+  const workflow = loadWorkflow();
+  const [{ json: withFlow }] = await runCodeNode(workflow, "Fetch Guided Flow", {
+    conversationId: 1,
+    customAttributes: {},
+  });
+
+  const [{ json: routed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    ...withFlow,
+    userText: "custom",
+    isInteractiveSubmission: true,
+    interactiveContentType: "input_select",
+    submittedValues: [{ title: "Ask a custom question", value: "custom" }],
+    guardrailRiskFlags: [],
+  });
+
+  assert.equal(routed.guidedAction, "guided_reply");
+  assert.equal(routed.nextGuidedState.current_node, "llm");
+  assert.equal(routed.nextGuidedState.step, "awaiting_custom");
+  assert.match(routed.guidedMessageBody.content, /Please describe the issue/i);
+});
+
+test("guided LLM mode resets to menu on greeting or help text", async () => {
+  const workflow = loadWorkflow();
+  const [{ json: withFlow }] = await runCodeNode(workflow, "Fetch Guided Flow", {
+    conversationId: 1,
+    customAttributes: {
+      n8n_guided_flow: {
+        current_node: "llm",
+        mode: "llm",
+        step: "llm_replied",
+        path: ["custom"],
+        form_data: {},
+        llm_turns: 7,
+      },
+    },
+  });
+
+  const [{ json: routed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    ...withFlow,
+    userText: "hi",
+    submittedValues: [],
+    guardrailRiskFlags: [],
+  });
+
+  assert.equal(routed.guidedAction, "guided_reply");
+  assert.equal(routed.nextGuidedState.current_node, "main");
+  assert.equal(routed.nextGuidedState.mode, "options");
+  assert.match(routed.guidedMessageBody.content, /What can I help you with/i);
+});
+
+test("guided LLM mode sends actual customer questions to AI", async () => {
+  const workflow = loadWorkflow();
+  const [{ json: withFlow }] = await runCodeNode(workflow, "Fetch Guided Flow", {
+    conversationId: 1,
+    customAttributes: {
+      n8n_guided_flow: {
+        current_node: "llm",
+        mode: "llm",
+        step: "awaiting_custom",
+        path: ["custom"],
+        form_data: {},
+        llm_turns: 0,
+      },
+    },
+  });
+
+  const [{ json: routed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    ...withFlow,
+    userText: "My withdrawal is taking too long",
+    submittedValues: [],
+    guardrailRiskFlags: [],
+  });
+
+  assert.equal(routed.guidedAction, "llm");
+  assert.equal(routed.nextGuidedState.current_node, "llm");
+  assert.equal(routed.nextGuidedState.step, "llm_support");
+  assert.equal(routed.guidedState.step, "llm_support");
 });
 
 test("workflow lets LLM own intent and knowledge selection", () => {
@@ -184,6 +312,94 @@ test("validate accepts top-level Chatwoot message_created customer incoming", ()
   assert.equal(res.data.messageId, 77);
   assert.equal(res.data.userText, "Need help");
   assert.equal(res.data.contactId, 44);
+});
+
+test("validate accepts Chatwoot input_select submission on message_updated", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      headers: { "x-chatwoot-delivery": "delivery-1" },
+      body: {
+        event: "message_updated",
+        id: 270,
+        content: "Did this resolve your issue?",
+        content_type: "input_select",
+        content_attributes: {
+          submitted_values: [{ title: "Yes, resolved", value: "resolved_yes" }],
+        },
+        message_type: "outgoing",
+        private: false,
+        sender: { id: 2, type: "user" },
+        account: { id: 1 },
+        conversation: {
+          id: 2,
+          inbox_id: 3,
+          meta: { sender: { id: 44, type: "contact" } },
+        },
+      },
+    },
+    {},
+  );
+  assert.equal(res.ok, true);
+  assert.equal(res.data.userText, "resolved_yes");
+  assert.equal(res.data.isInteractiveSubmission, true);
+  assert.equal(res.data.interactiveContentType, "input_select");
+  assert.equal(res.data.contactId, 44);
+  assert.equal(res.data.messageId, "270:input_select:resolved_yes:delivery-1");
+});
+
+test("validate accepts Chatwoot form submission on message_updated", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      headers: { "x-chatwoot-delivery": "delivery-2" },
+      body: {
+        event: "message_updated",
+        id: 280,
+        content: "Tell us about the lost reward.",
+        content_type: "form",
+        content_attributes: {
+          submitted_values: [{ name: "lost_location", value: "Tournament screen" }],
+        },
+        message_type: "outgoing",
+        private: false,
+        sender: { id: 2, type: "user" },
+        account: { id: 1 },
+        conversation: {
+          id: 2,
+          inbox_id: 3,
+          meta: { sender: { id: 44, type: "contact" } },
+        },
+      },
+    },
+    {},
+  );
+  assert.equal(res.ok, true);
+  assert.equal(res.data.userText, '{"lost_location":"Tournament screen"}');
+  assert.equal(res.data.isInteractiveSubmission, true);
+  assert.equal(res.data.interactiveContentType, "form");
+  assert.deepEqual(res.data.submittedValues, [{ name: "lost_location", value: "Tournament screen" }]);
+  assert.equal(res.data.messageId, '280:form:{"lost_location":"Tournament screen"}:delivery-2');
+});
+
+test("validate rejects non-selection message_updated events", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      body: {
+        event: "message_updated",
+        id: 270,
+        content: "Menu changed status",
+        content_type: "input_select",
+        content_attributes: { items: [{ title: "Status", value: "status" }] },
+        message_type: "outgoing",
+        private: false,
+        sender: { id: 2, type: "user" },
+        account: { id: 1 },
+        conversation: { id: 2, inbox_id: 3 },
+      },
+    },
+    {},
+  );
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "unsupported_event");
 });
 
 test("validate accepts Chatwoot payload with sender_type Contact", () => {
@@ -274,7 +490,7 @@ test("validate rejects agent outgoing", () => {
   assert.equal(res.ok, false);
 });
 
-test("safety escalates low confidence", () => {
+test("safety hands off low confidence", () => {
   const out = evaluateSafety({
     agent: {
       answer: "ok",
@@ -287,7 +503,7 @@ test("safety escalates low confidence", () => {
     upstream: { accountId: 1 },
     httpError: false,
   });
-  assert.equal(out.action, "escalate");
+  assert.equal(out.action, "handoff");
 });
 
 test("safety allows confident greeting without knowledge", () => {
@@ -326,7 +542,7 @@ test("safety replies when safe", () => {
   assert.equal(out.action, "reply");
 });
 
-test("safety escalates on risk flag", () => {
+test("safety hands off on risk flag", () => {
   const out = evaluateSafety({
     agent: {
       answer: "maybe",
@@ -339,17 +555,17 @@ test("safety escalates on risk flag", () => {
     upstream: { accountId: 1 },
     httpError: false,
   });
-  assert.equal(out.action, "escalate");
+  assert.equal(out.action, "handoff");
 });
 
-test("safety escalates missing or too long answer", () => {
+test("safety hands off missing or too long answer", () => {
   assert.equal(
     evaluateSafety({
       agent: { answer: "", confidence: 0.99, needs_human: false, risk_flags: [] },
       upstream: {},
       httpError: false,
     }).action,
-    "escalate",
+    "handoff",
   );
 
   assert.equal(
@@ -363,30 +579,30 @@ test("safety escalates missing or too long answer", () => {
       upstream: {},
       httpError: false,
     }).action,
-    "escalate",
+    "handoff",
   );
 });
 
-test("safety escalates on tool failure", () => {
+test("safety hands off on tool failure", () => {
   const out = evaluateSafety({ agent: null, upstream: {}, httpError: true });
-  assert.equal(out.action, "escalate");
+  assert.equal(out.action, "handoff");
   assert.match(out.privateSummary, /tool_failed/);
 });
 
-test("failure state escalates after two failed turns and resets on reply", () => {
+test("failure state hands off after two failed turns and resets on reply", () => {
   const first = nextFailureState({
     conversationId: 12,
     previous: {},
-    safety: { action: "escalate", confidence: 0.2 },
+    safety: { action: "handoff", confidence: 0.2 },
   });
-  assert.equal(first.forceEscalate, false);
+  assert.equal(first.forceHandoff, false);
 
   const second = nextFailureState({
     conversationId: 12,
     previous: first.counts,
-    safety: { action: "escalate", confidence: 0.2 },
+    safety: { action: "handoff", confidence: 0.2 },
   });
-  assert.equal(second.forceEscalate, true);
+  assert.equal(second.forceHandoff, true);
 
   const reset = nextFailureState({
     conversationId: 12,

@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function lowerHeaders(headers) {\n  const result = {};\n  Object.keys(headers || {}).forEach((k) => { result[String(k).toLowerCase()] = headers[k]; });\n  return result;\n}\n\nconst root = $input.first().json;\nconst headers = lowerHeaders(root.headers);\nconst secret = $env.CHATWOOT_WEBHOOK_SECRET;\nif (secret) {\n  const got = headers['x-webhook-secret'] || headers['x-chatwoot-secret'];\n  if (String(got || '') !== String(secret)) return [{ json: { skip: true, reason: 'bad_secret' } }];\n}\n\nconst payload = root.body && typeof root.body === 'object' ? root.body : root;\nif (payload.event !== 'message_created') return [{ json: { skip: true, reason: 'unsupported_event' } }];\n\nconst message = payload.message && typeof payload.message === 'object' ? payload.message : payload;\nconst conversation = payload.conversation || {};\nconst lastConversationMessage = Array.isArray(conversation.messages) ? (conversation.messages.find((item) => String(item.id) === String(message.id || payload.id)) || conversation.messages[0] || {}) : {};\nconst sender = message.sender || payload.sender || payload.contact || {};\nconst senderType = String(sender.type || message.sender_type || payload.sender_type || message.senderType || payload.senderType || lastConversationMessage.sender_type || lastConversationMessage.sender?.type || conversation.meta?.sender?.type || (payload.contact ? 'contact' : '')).toLowerCase();\nconst isContact = senderType === 'contact';\nconst mt = message.message_type ?? payload.message_type;\nconst isIncoming = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\nconst isPrivate = message.private === true || payload.private === true;\nif (isPrivate || !isContact || !isIncoming) return [{ json: { skip: true, reason: 'not_customer_incoming' } }];\n\nconst account = payload.account || {};\nconst inbox = payload.inbox || {};\nconst contact = payload.contact || ((senderType === 'contact' && sender.type) ? sender : undefined) || conversation.meta?.sender || lastConversationMessage.sender || {};\nconst accountId = account.id;\nconst conversationId = conversation.id || conversation.display_id || payload.conversation_id;\nconst messageId = message.id || payload.id;\nconst userText = String(message.content || payload.content || '').trim();\nif (!accountId || !conversationId || !messageId) return [{ json: { skip: true, reason: 'missing_ids' } }];\n\nreturn [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId: contact.id || conversation.contact_inbox?.contact_id || lastConversationMessage.sender_id, senderType, rawPayload: payload } }];\n"
+        "jsCode": "function lowerHeaders(headers) {\n  const result = {};\n  Object.keys(headers || {}).forEach((k) => { result[String(k).toLowerCase()] = headers[k]; });\n  return result;\n}\nfunction submittedEntries(attrs) {\n  const submitted = attrs.submitted_values || attrs.submittedValues || [];\n  if (Array.isArray(submitted)) return submitted;\n  if (submitted && typeof submitted === 'object') return Object.entries(submitted).map(([name, value]) => ({ name, value }));\n  return submitted ? [{ value: submitted }] : [];\n}\nfunction submissionValue(entries) {\n  const first = entries[0];\n  if (!first) return '';\n  if (typeof first === 'object') return first.value || first.payload || first.title || first.name || '';\n  return first;\n}\nfunction formData(entries) {\n  const data = {};\n  entries.forEach((entry, index) => {\n    if (!entry || typeof entry !== 'object') return;\n    const key = entry.name || entry.id || entry.key || `field_${index + 1}`;\n    data[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n  });\n  return data;\n}\n\nconst root = $input.first().json;\nconst headers = lowerHeaders(root.headers);\nconst secret = $env.CHATWOOT_WEBHOOK_SECRET;\nif (secret) {\n  const got = headers['x-webhook-secret'] || headers['x-chatwoot-secret'];\n  if (String(got || '') !== String(secret)) return [{ json: { skip: true, reason: 'bad_secret' } }];\n}\n\nconst payload = root.body && typeof root.body === 'object' ? root.body : root;\nconst message = payload.message && typeof payload.message === 'object' ? payload.message : payload;\nconst contentType = message.content_type || payload.content_type;\nconst contentAttributes = message.content_attributes || payload.content_attributes || {};\nconst entries = submittedEntries(contentAttributes);\nconst selectedValue = submissionValue(entries);\nconst supportedSubmission = ['input_select', 'form'].includes(contentType) && entries.length > 0;\nconst hasInteractiveSubmission = payload.event === 'message_updated' && supportedSubmission;\nif (payload.event !== 'message_created' && !hasInteractiveSubmission) return [{ json: { skip: true, reason: 'unsupported_event' } }];\n\nconst conversation = payload.conversation || {};\nconst lastConversationMessage = Array.isArray(conversation.messages) ? (conversation.messages.find((item) => String(item.id) === String(message.id || payload.id)) || conversation.messages[0] || {}) : {};\nconst sender = message.sender || payload.sender || payload.contact || {};\nconst senderType = String(sender.type || message.sender_type || payload.sender_type || message.senderType || payload.senderType || lastConversationMessage.sender_type || lastConversationMessage.sender?.type || conversation.meta?.sender?.type || (payload.contact ? 'contact' : '')).toLowerCase();\nconst isContact = senderType === 'contact';\nconst mt = message.message_type ?? payload.message_type;\nconst isIncoming = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\nconst isPrivate = message.private === true || payload.private === true;\nif (isPrivate || (!hasInteractiveSubmission && (!isContact || !isIncoming))) return [{ json: { skip: true, reason: 'not_customer_incoming' } }];\n\nconst account = payload.account || {};\nconst inbox = payload.inbox || {};\nconst contact = payload.contact || ((senderType === 'contact' && sender.type) ? sender : undefined) || conversation.meta?.sender || lastConversationMessage.sender || {};\nconst accountId = account.id;\nconst conversationId = conversation.id || conversation.display_id || payload.conversation_id;\nconst baseMessageId = message.id || payload.id;\nconst deliveryId = headers['x-chatwoot-delivery'] || payload.updated_at || payload.created_at || '';\nconst interactiveText = contentType === 'form' ? JSON.stringify(formData(entries)) : String(selectedValue || '').trim();\nconst messageId = hasInteractiveSubmission ? `${baseMessageId}:${contentType}:${interactiveText}:${deliveryId}` : baseMessageId;\nconst userText = String(hasInteractiveSubmission ? interactiveText : (message.content || payload.content || '')).trim();\nif (!accountId || !conversationId || !messageId) return [{ json: { skip: true, reason: 'missing_ids' } }];\n\nreturn [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId: contact.id || conversation.contact_inbox?.contact_id || lastConversationMessage.sender_id, senderType, isInteractiveSubmission: Boolean(hasInteractiveSubmission), interactiveContentType: hasInteractiveSubmission ? contentType : null, submittedValues: entries, rawPayload: payload } }];"
       },
       "id": "wf-code-validate",
       "name": "Validate & Normalize",
@@ -33,7 +33,7 @@
         0
       ],
       "notesInFlow": true,
-      "notes": "Accepts nested Agent Bot and top-level Chatwoot message_created payloads."
+      "notes": "Accepts customer message_created events and Chatwoot interactive message_updated submissions."
     },
     {
       "parameters": {
@@ -85,7 +85,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.seenMessages) staticData.seenMessages = {};\nif (!staticData.convDebounce) staticData.convDebounce = {};\n\nconst item = $input.first().json;\nconst messageId = String(item.messageId);\nconst convId = String(item.conversationId);\nconst now = Date.now();\nconst windowMs = Number($env.IDEMPOTENCY_WINDOW_MS || 120000);\nconst debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);\nfor (const k of Object.keys(staticData.seenMessages)) {\n  if (now - staticData.seenMessages[k] > windowMs) delete staticData.seenMessages[k];\n}\nif (staticData.seenMessages[messageId]) return [{ json: { ...item, skip: true, reason: 'duplicate_message' } }];\nconst last = staticData.convDebounce[convId] || 0;\nif (now - last < debounceMs) return [{ json: { ...item, skip: true, reason: 'conversation_debounce' } }];\nstaticData.seenMessages[messageId] = now;\nstaticData.convDebounce[convId] = now;\nreturn [{ json: { ...item, skip: false } }];\n"
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.seenMessages) staticData.seenMessages = {};\nif (!staticData.convDebounce) staticData.convDebounce = {};\n\nconst item = $input.first().json;\nconst messageId = String(item.messageId);\nconst convId = String(item.conversationId);\nconst now = Date.now();\nconst windowMs = Number($env.IDEMPOTENCY_WINDOW_MS || 120000);\nconst debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);\nconst isInteractiveSubmission = item.isInteractiveSubmission === true;\nfor (const k of Object.keys(staticData.seenMessages)) {\n  if (now - staticData.seenMessages[k] > windowMs) delete staticData.seenMessages[k];\n}\nif (staticData.seenMessages[messageId]) return [{ json: { ...item, skip: true, reason: 'duplicate_message' } }];\nconst last = staticData.convDebounce[convId] || 0;\nif (!isInteractiveSubmission && now - last < debounceMs) return [{ json: { ...item, skip: true, reason: 'conversation_debounce' } }];\nstaticData.seenMessages[messageId] = now;\nif (!isInteractiveSubmission) staticData.convDebounce[convId] = now;\nreturn [{ json: { ...item, skip: false } }];\n"
       },
       "id": "wf-code-idempotency",
       "name": "Idempotency & Debounce",
@@ -283,18 +283,33 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date().toISOString();\nconst stateKey = 'n8n_guided_flow';\nconst menuItems = [\n  { title: 'Reset password', value: 'reset_password' },\n  { title: 'Billing and invoices', value: 'billing_portal' },\n  { title: 'Outage or slowness', value: 'status' },\n  { title: 'Ask a custom question', value: 'custom_question' },\n  { title: 'Talk to a human', value: 'talk_to_human' }\n];\nconst resolutionItems = [\n  { title: 'Yes, resolved', value: 'resolved_yes' },\n  { title: 'No, talk to a human', value: 'resolved_no' },\n  { title: 'Ask another question', value: 'custom_question' },\n  { title: 'Show menu again', value: 'show_menu' }\n];\nconst faqMap = {\n  reset_password: { id: 'reset-password', title: 'Reset password' },\n  billing_portal: { id: 'billing-portal', title: 'Billing and invoices' },\n  status: { id: 'status', title: 'Outage or slowness' }\n};\nfunction asObject(value) {\n  if (!value) return {};\n  if (typeof value === 'string') {\n    try { return JSON.parse(value); } catch (e) { return {}; }\n  }\n  return typeof value === 'object' ? value : {};\n}\nfunction submittedValue(payload) {\n  const attrs = payload.message?.content_attributes || payload.content_attributes || {};\n  const submitted = attrs.submitted_values || attrs.submittedValues || payload.submitted_values || [];\n  const first = Array.isArray(submitted) ? submitted[0] : submitted;\n  if (first && typeof first === 'object') return first.value || first.payload || first.name || first.title;\n  if (typeof first === 'string') return first;\n  return '';\n}\nfunction normalizeSelection(raw, text) {\n  const value = String(raw || text || '').trim().toLowerCase();\n  const compact = value.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');\n  if (['1', 'reset', 'reset_password', 'forgot_password', 'password'].includes(compact)) return 'reset_password';\n  if (['2', 'billing', 'billing_portal', 'invoices', 'invoice'].includes(compact)) return 'billing_portal';\n  if (['3', 'status', 'outage', 'slowness'].includes(compact)) return 'status';\n  if (['4', 'custom', 'custom_question', 'ask_a_custom_question', 'question'].includes(compact)) return 'custom_question';\n  if (['5', 'human', 'agent', 'talk_to_human', 'representative'].includes(compact)) return 'talk_to_human';\n  if (['yes', 'y', 'resolved_yes', 'resolved'].includes(compact)) return 'resolved_yes';\n  if (['no', 'n', 'resolved_no', 'unresolved', 'not_resolved'].includes(compact)) return 'resolved_no';\n  if (['menu', 'show_menu', 'start_over', 'restart'].includes(compact)) return 'show_menu';\n  if (/forgot|reset.*password|password.*reset/.test(value)) return 'reset_password';\n  if (/bill|invoice|payment|card|refund|charge/.test(value)) return 'billing_portal';\n  if (/outage|slow|status|down|latency/.test(value)) return 'status';\n  if (/human|agent|person|representative/.test(value)) return 'talk_to_human';\n  return '';\n}\nfunction withState(item, action, nextState, body, extra = {}) {\n  return [{ json: { ...item, guidedAction: action, nextGuidedState: nextState, guidedMessageBody: body, ...extra } }];\n}\nfunction menuBody(content, items = menuItems) {\n  return { content, message_type: 'outgoing', private: false, content_type: 'input_select', content_attributes: { items } };\n}\nfunction nextState(base, patch) {\n  return { ...base, ...patch, updated_at: now };\n}\n\nconst item = $input.first().json;\nconst customAttributes = asObject(item.customAttributes);\nconst guidedState = asObject(customAttributes[stateKey]);\nconst rawPayload = item.rawPayload || {};\nconst submitted = submittedValue(rawPayload);\nconst selection = normalizeSelection(submitted, item.userText);\nconst text = String(item.userText || '').trim();\nconst baseState = { ...guidedState, conversation_id: item.conversationId };\n\nif (selection === 'talk_to_human' || (item.guardrailRiskFlags || []).includes('human_requested')) {\n  const state = nextState(baseState, { mode: 'escalated', step: 'human_requested', selected_option: selection || 'human_requested', resolved: false });\n  return withState(item, 'escalate', state, null, {\n    action: 'escalate',\n    intent: 'human_request',\n    confidence: 1,\n    riskFlags: Array.from(new Set([...(item.guardrailRiskFlags || []), 'human_requested'])),\n    knowledgeUsed: [],\n    publicAnswer: '',\n    labelSuggestions: Array.from(new Set([...(item.guardrailLabels || []), 'guided_flow', 'human_requested'])),\n    privateSummary: `Guided flow handoff requested. selected_option=${selection || 'human_requested'} transcript=${item.transcript || '(empty)'}`\n  });\n}\n\nif (selection === 'resolved_no') {\n  const state = nextState(baseState, { mode: 'escalated', step: 'unresolved_after_guided_answer', selected_option: selection, resolved: false });\n  return withState(item, 'escalate', state, null, {\n    action: 'escalate',\n    intent: 'guided_unresolved',\n    confidence: 1,\n    riskFlags: ['human_requested'],\n    knowledgeUsed: [],\n    publicAnswer: '',\n    labelSuggestions: ['guided_flow', 'guided_unresolved'],\n    privateSummary: `Customer marked guided answer unresolved. previous_option=${guidedState.selected_option || 'unknown'} transcript=${item.transcript || '(empty)'}`\n  });\n}\n\nif (selection === 'resolved_yes') {\n  const state = nextState(baseState, { mode: 'completed', step: 'resolved', selected_option: guidedState.selected_option || selection, resolved: true });\n  return withState(item, 'guided_reply', state, { content: 'Glad I could help. If anything else comes up, send a new message and I will show the support menu again.', message_type: 'outgoing', private: false });\n}\n\nif (selection === 'custom_question') {\n  const state = nextState(baseState, { mode: 'awaiting_custom', step: 'awaiting_custom_question', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'guided_reply', state, { content: 'Please describe the issue in your own words. I will try to help, and I will hand this to a human if we cannot resolve it.', message_type: 'outgoing', private: false });\n}\n\nif (selection === 'show_menu') {\n  const state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false });\n  return withState(item, 'guided_reply', state, menuBody('What can I help you with? Choose an option below.'));\n}\n\nif (guidedState.mode === 'awaiting_custom' && text && !submitted) {\n  const state = nextState(baseState, { mode: 'llm', step: 'llm_support', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'llm', state, null, { guidedState });\n}\n\nif (guidedState.mode === 'llm' && text && !submitted) {\n  const state = nextState(baseState, { mode: 'llm', step: 'llm_support', selected_option: 'custom_question', resolved: false, llm_turns: Number(guidedState.llm_turns || 0) });\n  return withState(item, 'llm', state, null, { guidedState });\n}\n\nif (faqMap[selection]) {\n  const faq = (item.knowledgePack || []).find((entry) => entry.id === faqMap[selection].id);\n  const answer = faq ? faq.body : 'I found that topic, but the answer is not configured yet.';\n  const state = nextState(baseState, { mode: 'awaiting_resolution', step: 'resolution_check', selected_option: selection, resolved: false, knowledge_used: [faqMap[selection].id] });\n  return withState(item, 'guided_reply', state, menuBody(`${faqMap[selection].title}: ${answer}\\n\\nDid this resolve your issue?`, resolutionItems), { knowledgeUsed: [faqMap[selection].id] });\n}\n\nconst greetingOnly = /^(hi|hello|hey|start|help|menu)$/i.test(text) || !text;\nif (!guidedState.mode || guidedState.mode === 'completed' || greetingOnly) {\n  const state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false, llm_turns: 0 });\n  return withState(item, 'guided_reply', state, menuBody('Welcome. What can I help you with? Choose an option below.'));\n}\n\nconst state = nextState(baseState, { mode: 'menu', step: 'main_menu', selected_option: null, resolved: false });\nreturn withState(item, 'guided_reply', state, menuBody('I can help route this. Choose an option below, or pick custom question if none fit.'));"
+        "jsCode": "const guidedFlow = {\n  version: 1,\n  entry: 'main',\n  nodes: {\n    main: {\n      type: 'options',\n      prompt: 'What can I help you with?',\n      options: [\n        { id: 'lost_reward', text: 'Lost Reward', target: 'lost_reward_form' },\n        { id: 'withdrawal', text: 'Withdrawal', target: 'withdrawal_menu' },\n        { id: 'custom', text: 'Ask a custom question', target: 'llm' },\n        { id: 'human', text: 'Talk to a human', target: 'human' }\n      ]\n    },\n    lost_reward_form: {\n      type: 'form',\n      prompt: 'Tell us about the lost reward.',\n      fields: [\n        { id: 'lost_location', label: 'Where did you lose it?', type: 'text', required: true, placeholder: 'Game, screen, or reward name' }\n      ],\n      submitTarget: 'human'\n    },\n    withdrawal_menu: {\n      type: 'options',\n      prompt: 'Withdrawal help',\n      options: [\n        { id: 'withdrawal_timing', text: 'How long does withdrawal take?', target: 'withdrawal_timing_answer' },\n        { id: 'withdrawal_how', text: 'How to withdraw', target: 'withdrawal_how_answer' },\n        { id: 'withdrawal_problem', text: 'Problem with withdraw', target: 'withdrawal_problem_menu' }\n      ]\n    },\n    withdrawal_timing_answer: {\n      type: 'text',\n      content: 'Withdrawals take 2-3 days.',\n      next: 'resolution_check'\n    },\n    withdrawal_how_answer: {\n      type: 'text',\n      content: 'Go to Settings, open Withdrawals, choose your method, then submit the withdrawal request.',\n      next: 'resolution_check'\n    },\n    withdrawal_problem_menu: {\n      type: 'options',\n      prompt: 'What happened with the withdrawal?',\n      options: [\n        { id: 'withdrawal_too_long', text: 'Taking too long', target: 'withdrawal_problem_form' },\n        { id: 'withdrawal_errored', text: 'Errored out', target: 'withdrawal_problem_form' }\n      ]\n    },\n    withdrawal_problem_form: {\n      type: 'form',\n      prompt: 'Share withdrawal details so a human can investigate.',\n      fields: [\n        { id: 'withdrawal_id', label: 'Withdrawal ID or account email', type: 'text', required: true },\n        { id: 'problem_details', label: 'What happened?', type: 'text_area', required: true }\n      ],\n      submitTarget: 'human'\n    },\n    resolution_check: {\n      type: 'options',\n      prompt: 'Did this resolve your issue?',\n      options: [\n        { id: 'resolved_yes', text: 'Yes, resolved', target: 'resolved' },\n        { id: 'resolved_no', text: 'No, talk to a human', target: 'human' },\n        { id: 'another_question', text: 'Ask another question', target: 'llm' },\n        { id: 'show_menu', text: 'Show menu again', target: 'main' }\n      ]\n    },\n    resolved: {\n      type: 'text',\n      content: 'Glad I could help. If anything else comes up, send a new message and I will show the support menu again.'\n    },\n    llm: { type: 'llm', prompt: 'Please describe the issue in your own words. I will try to help, and I will hand this to a human if we cannot resolve it.' },\n    human: { type: 'human' }\n  }\n};\nreturn [{ json: { ...$json, guidedFlow } }];"
+      },
+      "id": "wf-code-fetch-guided-flow",
+      "name": "Fetch Guided Flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        120
+      ],
+      "notesInFlow": true,
+      "notes": "Temporary API stand-in: returns dynamic guided flow JSON. Replace with HTTP Request later."
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\nconst stateKey = 'n8n_guided_flow';\nfunction asObject(value) {\n  if (!value) return {};\n  if (typeof value === 'string') {\n    try { return JSON.parse(value); } catch (e) { return {}; }\n  }\n  return typeof value === 'object' ? value : {};\n}\nfunction slug(value) {\n  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');\n}\nfunction submittedEntries(item) {\n  if (Array.isArray(item.submittedValues)) return item.submittedValues;\n  const payload = item.rawPayload || {};\n  const attrs = payload.message?.content_attributes || payload.content_attributes || {};\n  const submitted = attrs.submitted_values || attrs.submittedValues || [];\n  if (Array.isArray(submitted)) return submitted;\n  if (submitted && typeof submitted === 'object') return Object.entries(submitted).map(([name, value]) => ({ name, value }));\n  return submitted ? [{ value: submitted }] : [];\n}\nfunction firstSubmittedValue(entries) {\n  const first = entries[0];\n  if (!first) return '';\n  if (typeof first === 'object') return first.value || first.payload || first.name || first.title || '';\n  return first;\n}\nfunction collectFormData(entries) {\n  const data = {};\n  entries.forEach((entry, index) => {\n    if (!entry || typeof entry !== 'object') return;\n    const key = entry.name || entry.id || entry.key || `field_${index + 1}`;\n    data[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n  });\n  return data;\n}\nfunction stateWith(base, patch) {\n  return { ...base, ...patch, updated_at: now };\n}\nfunction output(item, guidedAction, nextGuidedState, guidedMessageBody, extra = {}) {\n  return [{ json: { ...item, guidedAction, nextGuidedState, guidedMessageBody, ...extra } }];\n}\nfunction menuBody(content, options) {\n  return {\n    content,\n    message_type: 'outgoing',\n    private: false,\n    content_type: 'input_select',\n    content_attributes: { items: options.map((option) => ({ title: option.text, value: option.id })) }\n  };\n}\nfunction formBody(node) {\n  const typeMap = { textarea: 'text_area', text_area: 'text_area', email: 'email', select: 'select', text: 'text' };\n  return {\n    content: node.prompt || 'Please provide the details below.',\n    message_type: 'outgoing',\n    private: false,\n    content_type: 'form',\n    content_attributes: {\n      items: (node.fields || []).map((field) => ({\n        name: field.id,\n        label: field.label || field.prompt || field.id,\n        type: typeMap[field.type] || 'text',\n        placeholder: field.placeholder || '',\n        required: field.required === true,\n        options: Array.isArray(field.options) ? field.options.map((option) => ({ label: option.label || option.text, value: option.value || option.id || option.text })) : undefined\n      }))\n    }\n  };\n}\nfunction textBody(content) {\n  return { content, message_type: 'outgoing', private: false };\n}\nfunction validateFlow(flow) {\n  return flow && typeof flow === 'object' && flow.entry && flow.nodes && typeof flow.nodes === 'object' && flow.nodes[flow.entry];\n}\n\nconst item = $input.first().json;\nconst flow = item.guidedFlow || {};\nconst customAttributes = asObject(item.customAttributes);\nconst guidedState = asObject(customAttributes[stateKey]);\nconst baseState = {\n  flow_version: flow.version || 1,\n  conversation_id: item.conversationId,\n  current_node: guidedState.current_node || flow.entry,\n  path: Array.isArray(guidedState.path) ? guidedState.path : [],\n  form_data: asObject(guidedState.form_data),\n  llm_turns: Number(guidedState.llm_turns || 0),\n  selected_option: guidedState.selected_option || null,\n  mode: guidedState.mode || null,\n  step: guidedState.step || null\n};\nfunction handoff(reason, nodeId, extra = {}) {\n  const state = stateWith(baseState, { current_node: nodeId || baseState.current_node || flow.entry, mode: 'handoff', step: reason, last_action: reason, resolved: false, ...extra.state });\n  return output(item, 'handoff', state, null, {\n    action: 'handoff',\n    intent: reason,\n    confidence: 1,\n    riskFlags: Array.from(new Set([...(item.guardrailRiskFlags || []), 'human_requested'])),\n    knowledgeUsed: [],\n    publicAnswer: '',\n    labelSuggestions: Array.from(new Set([...(item.guardrailLabels || []), 'guided_flow', ...(extra.labels || [])])),\n    privateSummary: extra.summary || `Guided flow handoff. reason=${reason} node=${nodeId || baseState.current_node} path=${state.path.join('>')} form_data=${JSON.stringify(state.form_data || {})}`\n  });\n}\nfunction renderNode(nodeId, patch = {}) {\n  const node = flow.nodes[nodeId];\n  if (!node) return handoff('guided_flow_missing_node', nodeId, { labels: ['guided_flow_error'], summary: `Guided flow missing node: ${nodeId}` });\n  const common = stateWith(baseState, { current_node: nodeId, mode: node.type, step: node.type, last_action: `show_${node.type}`, resolved: false, ...patch });\n  if (node.type === 'options') return output(item, 'guided_reply', common, menuBody(node.prompt || 'Choose an option.', node.options || []));\n  if (node.type === 'form') return output(item, 'guided_reply', common, formBody(node));\n  if (node.type === 'text') {\n    if (node.next && flow.nodes[node.next]?.type === 'options') {\n      const nextNode = flow.nodes[node.next];\n      const state = stateWith(common, { current_node: node.next, mode: 'options', step: 'options', last_action: 'show_text_with_options' });\n      return output(item, 'guided_reply', state, menuBody([node.content || '', nextNode.prompt || 'Choose an option.'].filter(Boolean).join('\\n\\n'), nextNode.options || []));\n    }\n    return output(item, 'guided_reply', stateWith(common, { resolved: nodeId === 'resolved' }), textBody(node.content || 'Done.'));\n  }\n  if (node.type === 'llm') {\n    const state = stateWith(common, { mode: 'llm', step: 'awaiting_custom', selected_option: patch.selected_option || baseState.selected_option || 'custom' });\n    const enteringFromSelection = currentNodeId !== nodeId || submitted || patch.last_action === 'option_selected';\n    if (enteringFromSelection) {\n      return output(item, 'guided_reply', state, textBody(node.prompt || 'Please describe the issue in your own words.'));\n    }\n    return output(item, 'llm', stateWith(state, { step: 'llm_support' }), null, { guidedState: stateWith(state, { step: 'llm_support' }) });\n  }\n  if (node.type === 'human') return handoff('human_requested', nodeId, { labels: ['human_requested'], state: patch });\n  return handoff('guided_flow_unknown_type', nodeId, { labels: ['guided_flow_error'], summary: `Unsupported guided flow node type: ${node.type}` });\n}\nfunction findOption(node, rawValue, textValue) {\n  const options = Array.isArray(node?.options) ? node.options : [];\n  const direct = String(rawValue || '').trim();\n  const directSlug = slug(direct || textValue);\n  return options.find((option) => option.id === direct || slug(option.id) === directSlug || slug(option.text) === directSlug);\n}\n\nif (!validateFlow(flow)) return handoff('guided_flow_invalid_config', flow.entry || 'unknown', { labels: ['guided_flow_error'], summary: 'Guided flow config is missing entry/nodes.' });\nif ((item.guardrailRiskFlags || []).includes('human_requested')) return renderNode('human');\n\nconst entries = submittedEntries(item);\nconst submitted = firstSubmittedValue(entries);\nconst formData = collectFormData(entries);\nconst currentNodeId = baseState.current_node || flow.entry;\nconst currentNode = flow.nodes[currentNodeId] || flow.nodes[flow.entry];\nconst text = String(item.userText || '').trim();\nconst greetingOnly = /^(hi|hello|hey|start|help|menu)$/i.test(text) || !text;\n\nif (item.interactiveContentType === 'form' && currentNode?.type === 'form' && Object.keys(formData).length) {\n  const nextFormData = { ...baseState.form_data, [currentNodeId]: formData };\n  const target = currentNode.submitTarget || currentNode.next || 'human';\n  return renderNode(target, { form_data: nextFormData, path: [...baseState.path, `${currentNodeId}:submitted`], last_action: 'form_submitted' });\n}\n\nif (currentNode?.type === 'options') {\n  const option = findOption(currentNode, submitted, text);\n  if (option) {\n    return renderNode(option.target, { selected_option: option.id, path: [...baseState.path, option.id], last_action: 'option_selected' });\n  }\n}\n\nif (!guidedState.current_node || guidedState.mode === 'completed' || greetingOnly) return renderNode(flow.entry, { path: [], form_data: {}, selected_option: null, llm_turns: 0 });\nif (currentNode?.type === 'llm' && text && !submitted) return renderNode(currentNodeId);\nreturn renderNode(flow.entry, { path: [], selected_option: null });"
       },
       "id": "wf-code-guided-router",
       "name": "Guided Flow Router",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        340,
         120
       ],
       "notesInFlow": true,
-      "notes": "Routes first-entry menu, guided FAQ answers, custom LLM flow, and human handoff using conversation custom attributes."
+      "notes": "Interprets guidedFlow JSON into options, forms, text, LLM handoff, or human handoff."
     },
     {
       "parameters": {
@@ -325,7 +340,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        440,
+        560,
         120
       ]
     },
@@ -340,9 +355,9 @@
           },
           "conditions": [
             {
-              "id": "cond-guided-escalate",
+              "id": "cond-guided-handoff",
               "leftValue": "={{ $json.guidedAction }}",
-              "rightValue": "escalate",
+              "rightValue": "handoff",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -354,11 +369,11 @@
         "options": {}
       },
       "id": "wf-if-guided-escalate",
-      "name": "Guided action is escalate?",
+      "name": "Guided action is handoff?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        660,
+        780,
         -80
       ]
     },
@@ -391,7 +406,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1000,
         -160
       ],
       "alwaysOutputData": true,
@@ -426,7 +441,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
+        1220,
         -160
       ]
     },
@@ -441,13 +456,13 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1320,
+        1440,
         -160
       ]
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\nconst current = item.nextGuidedState || item.guidedState || {};\nconst cameFromLlm = item.guidedAction === 'llm' || current.mode === 'llm' || current.step === 'llm_support';\nconst llmTurns = Number(current.llm_turns || 0) + (cameFromLlm ? 1 : 0);\nconst escalated = item.action === 'escalate';\nconst nextGuidedState = {\n  ...current,\n  mode: escalated ? 'escalated' : 'llm',\n  step: escalated ? (cameFromLlm ? 'llm_escalated' : (current.step || 'guided_escalated')) : 'llm_replied',\n  selected_option: current.selected_option || 'custom_question',\n  llm_turns: llmTurns,\n  resolved: false,\n  updated_at: now\n};\nconst labelSuggestions = Array.from(new Set([...(item.labelSuggestions || []), 'guided_flow']));\nconst privateSummary = [\n  item.privateSummary || 'No summary provided by AI Agent.',\n  `guided_mode=${nextGuidedState.mode}`,\n  `guided_step=${nextGuidedState.step}`,\n  `guided_selected=${nextGuidedState.selected_option}`,\n  `llm_turns=${llmTurns}`\n].join(' | ');\nreturn [{ json: { ...item, nextGuidedState, labelSuggestions, privateSummary, failedTurnCount: item.failedTurnCount } }];\n"
+        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\nconst current = item.nextGuidedState || item.guidedState || {};\nconst cameFromLlm = item.guidedAction === 'llm' || current.mode === 'llm' || current.step === 'llm_support';\nconst llmTurns = Number(current.llm_turns || 0) + (cameFromLlm ? 1 : 0);\nconst handoff = item.action === 'handoff';\nconst nextGuidedState = {\n  ...current,\n  mode: handoff ? 'handoff' : 'llm',\n  step: handoff ? (cameFromLlm ? 'llm_handoff' : (current.step || 'guided_handoff')) : 'llm_replied',\n  selected_option: current.selected_option || 'custom_question',\n  llm_turns: llmTurns,\n  resolved: false,\n  updated_at: now\n};\nconst labelSuggestions = Array.from(new Set([...(item.labelSuggestions || []), 'guided_flow']));\nconst privateSummary = [\n  item.privateSummary || 'No summary provided by AI Agent.',\n  `guided_mode=${nextGuidedState.mode}`,\n  `guided_step=${nextGuidedState.step}`,\n  `guided_selected=${nextGuidedState.selected_option}`,\n  `llm_turns=${llmTurns}`\n].join(' | ');\nreturn [{ json: { ...item, nextGuidedState, labelSuggestions, privateSummary, failedTurnCount: item.failedTurnCount } }];\n"
       },
       "id": "wf-code-prepare-llm-state",
       "name": "Prepare LLM Guided State",
@@ -458,7 +473,7 @@
         120
       ],
       "notesInFlow": true,
-      "notes": "Updates guided-flow state after LLM reply/escalation and enriches human handoff summary."
+      "notes": "Updates guided-flow state after LLM reply/handoff and enriches human handoff summary."
     },
     {
       "parameters": {
@@ -504,7 +519,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        780,
         220
       ],
       "notesInFlow": true,
@@ -587,14 +602,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const requiredJson = '{\"intent\":\"greeting|faq|billing|technical_issue|human_request|legal_security|data_deletion|unknown\",\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"knowledge_used\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst guided = $json.nextGuidedState || $json.guidedState || {};\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'You own intent classification and knowledge selection.',\n  'Choose relevant knowledge ids in knowledge_used. Use [] when none applies.',\n  'This conversation is in guided custom-support mode when guided.mode is llm or awaiting_custom.',\n  '', 'Latest customer message:', $json.userText,\n  '', 'Guided flow state:', JSON.stringify(guided),\n  'Guardrail risk flags:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'Knowledge pack:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
+        "jsCode": "const requiredJson = '{\"intent\":\"greeting|faq|billing|technical_issue|human_request|legal_security|data_deletion|unknown\",\"answer\":\"string|null\",\"confidence\":0.0,\"needs_human\":false,\"risk_flags\":[],\"knowledge_used\":[],\"labels\":[],\"private_summary\":\"string\"}';\nconst guided = $json.nextGuidedState || $json.guidedState || {};\nconst agentPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '', 'You own intent classification and knowledge selection.',\n  'Choose relevant knowledge ids in knowledge_used. Use [] when none applies.',\n  'This conversation is in guided custom-support mode when guided.mode is llm or awaiting_custom.',\n  '', 'Latest customer message:', $json.userText,\n  '', 'Guided flow state:', JSON.stringify(guided),\n  'Guardrail risk flags:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Context failed:', String($json.contextFailed),\n  '', 'Recent transcript:', $json.transcript || '(empty)',\n  '', 'Conversation labels:', JSON.stringify($json.labels || []),\n  'Conversation custom attributes:', JSON.stringify($json.customAttributes || {}),\n  'Conversation additional attributes:', JSON.stringify($json.additionalAttributes || {}),\n  '', 'Knowledge pack:', $json.knowledgeContext,\n  '', 'Tool context:', JSON.stringify($json.toolContext || {})\n].join('\\\\n');\nreturn [{ json: { ...$json, agentPrompt } }];\n"
       },
       "id": "wf-code-agent-input",
       "name": "Build AI Agent Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
+        1000,
         220
       ]
     },
@@ -615,7 +630,7 @@
         220
       ],
       "notesInFlow": true,
-      "notes": "Configure OpenAI credentials after import. Deterministic Safety Gate still owns final decision."
+      "notes": "Configure OpenAI credentials after import. Safety Gate still owns final decision."
     },
     {
       "parameters": {
@@ -658,7 +673,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const upstream = $('Parse AI Agent Output').first().json;\nlet agent = upstream.agentOutput || {};\nconst risk = new Set(Array.isArray(agent.risk_flags) ? agent.risk_flags : []);\nfor (const flag of upstream.guardrailRiskFlags || []) risk.add(flag);\nif (upstream.contextFailed) risk.add('tool_failed');\nagent = { ...agent, risk_flags: Array.from(risk), labels: Array.from(new Set([...(Array.isArray(agent.labels) ? agent.labels : []), ...(upstream.guardrailLabels || [])])) };\n\nconst escalationFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','unknown'];\nconst confidence = typeof agent.confidence === 'number' ? agent.confidence : 0;\nconst answer = typeof agent.answer === 'string' ? agent.answer.trim() : '';\nconst risky = agent.risk_flags.some((f) => escalationFlags.includes(f));\nconst shouldEscalate = agent.needs_human === true || confidence < 0.7 || risky || !answer || answer.length > 1200;\nconst action = shouldEscalate ? 'escalate' : 'reply';\nconst summary = typeof agent.private_summary === 'string' && agent.private_summary.trim() ? agent.private_summary.trim() : 'No summary provided by AI Agent.';\nreturn [{ json: { ...upstream, action, intent: agent.intent || 'unknown', confidence, riskFlags: agent.risk_flags, knowledgeUsed: Array.isArray(agent.knowledge_used) ? agent.knowledge_used : [], publicAnswer: answer, privateSummary: [summary, `action=${action}`, `intent=${agent.intent || 'unknown'}`, `confidence=${confidence}`, `risk_flags=${agent.risk_flags.join(',')}`, `knowledge_used=${(Array.isArray(agent.knowledge_used) ? agent.knowledge_used : []).join(',')}`].join(' | '), labelSuggestions: agent.labels } }];\n"
+        "jsCode": "const upstream = $('Parse AI Agent Output').first().json;\nlet agent = upstream.agentOutput || {};\nconst risk = new Set(Array.isArray(agent.risk_flags) ? agent.risk_flags : []);\nfor (const flag of upstream.guardrailRiskFlags || []) risk.add(flag);\nif (upstream.contextFailed) risk.add('tool_failed');\nagent = { ...agent, risk_flags: Array.from(risk), labels: Array.from(new Set([...(Array.isArray(agent.labels) ? agent.labels : []), ...(upstream.guardrailLabels || [])])) };\n\nconst handoffFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','unknown'];\nconst confidence = typeof agent.confidence === 'number' ? agent.confidence : 0;\nconst answer = typeof agent.answer === 'string' ? agent.answer.trim() : '';\nconst risky = agent.risk_flags.some((f) => handoffFlags.includes(f));\nconst shouldHandoff = agent.needs_human === true || confidence < 0.7 || risky || !answer || answer.length > 1200;\nconst action = shouldHandoff ? 'handoff' : 'reply';\nconst summary = typeof agent.private_summary === 'string' && agent.private_summary.trim() ? agent.private_summary.trim() : 'No summary provided by AI Agent.';\nreturn [{ json: { ...upstream, action, intent: agent.intent || 'unknown', confidence, riskFlags: agent.risk_flags, knowledgeUsed: Array.isArray(agent.knowledge_used) ? agent.knowledge_used : [], publicAnswer: answer, privateSummary: [summary, `action=${action}`, `intent=${agent.intent || 'unknown'}`, `confidence=${confidence}`, `risk_flags=${agent.risk_flags.join(',')}`, `knowledge_used=${(Array.isArray(agent.knowledge_used) ? agent.knowledge_used : []).join(',')}`].join(' | '), labelSuggestions: agent.labels } }];\n"
       },
       "id": "wf-code-safety",
       "name": "Safety Gate",
@@ -669,11 +684,11 @@
         220
       ],
       "notesInFlow": true,
-      "notes": "Deterministic gate: confidence, length, risk_flags, needs_human, context/tool failure."
+      "notes": ""
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.failedTurns) staticData.failedTurns = {};\nconst item = $input.first().json;\nconst key = String(item.conversationId);\nconst failed = item.action === 'escalate' || Number(item.confidence || 0) < 0.75;\nconst count = failed ? Number(staticData.failedTurns[key] || 0) + 1 : 0;\nstaticData.failedTurns[key] = count;\nconst forceEscalate = count >= Number($env.FAILED_TURN_THRESHOLD || 2);\nif (forceEscalate && item.action !== 'escalate') {\n  return [{ json: { ...item, action: 'escalate', privateSummary: `${item.privateSummary} | forced_escalation_after_failed_turns=${count}`, labelSuggestions: Array.from(new Set([...(item.labelSuggestions || []), 'repeated_bot_failure'])) } }];\n}\nreturn [{ json: { ...item, failedTurnCount: count } }];\n"
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.failedTurns) staticData.failedTurns = {};\nconst item = $input.first().json;\nconst key = String(item.conversationId);\nconst failed = item.action === 'handoff' || Number(item.confidence || 0) < 0.75;\nconst count = failed ? Number(staticData.failedTurns[key] || 0) + 1 : 0;\nstaticData.failedTurns[key] = count;\nconst forceHandoff = count >= Number($env.FAILED_TURN_THRESHOLD || 2);\nif (forceHandoff && item.action !== 'handoff') {\n  return [{ json: { ...item, action: 'handoff', privateSummary: `${item.privateSummary} | forced_handoff_after_failed_turns=${count}`, labelSuggestions: Array.from(new Set([...(item.labelSuggestions || []), 'repeated_bot_failure'])) } }];\n}\nreturn [{ json: { ...item, failedTurnCount: count } }];\n"
       },
       "id": "wf-code-failure-tracker",
       "name": "Failed Turn Tracker",
@@ -684,7 +699,7 @@
         220
       ],
       "notesInFlow": true,
-      "notes": "Escalates after FAILED_TURN_THRESHOLD failed bot turns per conversation."
+      "notes": "Hands off after FAILED_TURN_THRESHOLD failed bot turns per conversation."
     },
     {
       "parameters": {
@@ -879,7 +894,7 @@
         "options": {}
       },
       "id": "wf-respond-final-esc",
-      "name": "Respond OK (escalated)",
+      "name": "Respond OK (handoff)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -1017,7 +1032,7 @@
       "main": [
         [
           {
-            "node": "Guided Flow Router",
+            "node": "Fetch Guided Flow",
             "type": "main",
             "index": 0
           }
@@ -1156,7 +1171,7 @@
       "main": [
         [
           {
-            "node": "Respond OK (escalated)",
+            "node": "Respond OK (handoff)",
             "type": "main",
             "index": 0
           }
@@ -1185,14 +1200,14 @@
         ],
         [
           {
-            "node": "Guided action is escalate?",
+            "node": "Guided action is handoff?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Guided action is escalate?": {
+    "Guided action is handoff?": {
       "main": [
         [
           {
@@ -1248,6 +1263,17 @@
         [
           {
             "node": "Action is reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Guided Flow": {
+      "main": [
+        [
+          {
+            "node": "Guided Flow Router",
             "type": "main",
             "index": 0
           }

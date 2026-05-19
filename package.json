@@ -2,6 +2,10 @@
   "name": "chatwoot-n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/workflow-and-logic.test.mjs"
+    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs",
+    "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^6.1.2"
   }
 }

@@ -13,10 +13,14 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
 ## Quick start
 
 1. `cp .env.example .env` and fill Chatwoot + OpenAI vars.  
-2. `docker compose up -d` – n8n on port `5678` and Postgres on `5432` (volumes `n8n_data`, `postgres_data`).  
+2. `docker compose up -d` – n8n on port `5678` and Postgres on host port `5433` by default (container still listens on `5432` internally; set `POSTGRES_PORT` if you need a different host mapping). Volumes: `n8n_data`, `postgres_data`.  
 3. Apply bot-state schema:
    ```bash
-   docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < migrations/001_bot_support_state.sql
+   docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/001_bot_support_state.sql
+   ```
+   From the host (default mapped port `5433`):
+   ```bash
+   psql -h localhost -p "${POSTGRES_PORT:-5433}" -U chatwoot_bot -d chatwoot_bot -f migrations/001_bot_support_state.sql
    ```
 4. Complete n8n onboarding, import a workflow JSON, activate:
    - **Legacy (Chatwoot-stored guided state):** `workflows/chatwoot-support-bot.json` → webhook `chatwoot-support-bot`

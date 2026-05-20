@@ -8,13 +8,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "rag-webhook-chatwoot",
+      "id": "c1f1158c-e51c-4579-af2c-4d39031a11c5",
       "name": "Webhook RAG AgentBot",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -2200,
-        0
+        -656,
+        192
       ],
       "webhookId": "chatwoot-rag-guided-bot-ingest",
       "notesInFlow": true,
@@ -24,13 +24,13 @@
       "parameters": {
         "jsCode": "function lowerHeaders(headers) {\n  const result = {};\n  Object.keys(headers || {}).forEach((k) => { result[String(k).toLowerCase()] = headers[k]; });\n  return result;\n}\nfunction submittedEntries(attrs) {\n  const submitted = attrs.submitted_values || attrs.submittedValues || [];\n  if (Array.isArray(submitted)) return submitted;\n  if (submitted && typeof submitted === 'object') return Object.entries(submitted).map(([name, value]) => ({ name, value }));\n  return submitted ? [{ value: submitted }] : [];\n}\nfunction submissionValue(entries) {\n  const first = entries[0];\n  if (!first) return '';\n  if (typeof first === 'object') return first.value || first.payload || first.title || first.name || '';\n  return first;\n}\nfunction formData(entries) {\n  const data = {};\n  entries.forEach((entry, index) => {\n    if (!entry || typeof entry !== 'object') return;\n    const key = entry.name || entry.id || entry.key || `field_${index + 1}`;\n    data[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n  });\n  return data;\n}\n\nconst root = $input.first().json;\nconst headers = lowerHeaders(root.headers);\nconst secret = $env.CHATWOOT_WEBHOOK_SECRET;\nif (secret) {\n  const got = headers['x-webhook-secret'] || headers['x-chatwoot-secret'];\n  if (String(got || '') !== String(secret)) return [{ json: { skip: true, reason: 'bad_secret' } }];\n}\n\nconst payload = root.body && typeof root.body === 'object' ? root.body : root;\nconst message = payload.message && typeof payload.message === 'object' ? payload.message : payload;\nconst contentType = message.content_type || payload.content_type;\nconst contentAttributes = message.content_attributes || payload.content_attributes || {};\nconst entries = submittedEntries(contentAttributes);\nconst selectedValue = submissionValue(entries);\nconst supportedSubmission = ['input_select', 'form'].includes(contentType) && entries.length > 0;\nconst hasInteractiveSubmission = payload.event === 'message_updated' && supportedSubmission;\nif (payload.event !== 'message_created' && !hasInteractiveSubmission) return [{ json: { skip: true, reason: 'unsupported_event' } }];\n\nconst conversation = payload.conversation || {};\nconst lastConversationMessage = Array.isArray(conversation.messages) ? (conversation.messages.find((item) => String(item.id) === String(message.id || payload.id)) || conversation.messages[0] || {}) : {};\nconst sender = message.sender || payload.sender || payload.contact || {};\nconst senderType = String(sender.type || message.sender_type || payload.sender_type || message.senderType || payload.senderType || lastConversationMessage.sender_type || lastConversationMessage.sender?.type || conversation.meta?.sender?.type || (payload.contact ? 'contact' : '')).toLowerCase();\nconst isContact = senderType === 'contact';\nconst mt = message.message_type ?? payload.message_type;\nconst isIncoming = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\nconst isPrivate = message.private === true || payload.private === true;\nif (isPrivate || (!hasInteractiveSubmission && (!isContact || !isIncoming))) return [{ json: { skip: true, reason: 'not_customer_incoming' } }];\n\nconst account = payload.account || {};\nconst inbox = payload.inbox || {};\nconst contact = payload.contact || ((senderType === 'contact' && sender.type) ? sender : undefined) || conversation.meta?.sender || lastConversationMessage.sender || {};\nconst accountId = account.id;\nconst conversationId = conversation.id || conversation.display_id || payload.conversation_id;\nconst baseMessageId = message.id || payload.id;\nconst deliveryId = headers['x-chatwoot-delivery'] || payload.updated_at || payload.created_at || '';\nconst interactiveText = contentType === 'form' ? JSON.stringify(formData(entries)) : String(selectedValue || '').trim();\nconst messageId = hasInteractiveSubmission ? `${baseMessageId}:${contentType}:${interactiveText}:${deliveryId}` : baseMessageId;\nconst userText = String(hasInteractiveSubmission ? interactiveText : (message.content || payload.content || '')).trim();\nif (!accountId || !conversationId || !messageId) return [{ json: { skip: true, reason: 'missing_ids' } }];\n\nreturn [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId: contact.id || conversation.contact_inbox?.contact_id || lastConversationMessage.sender_id, senderType, isInteractiveSubmission: Boolean(hasInteractiveSubmission), interactiveContentType: hasInteractiveSubmission ? contentType : null, submittedValues: entries, rawPayload: payload } }];"
       },
-      "id": "rag-code-validate",
+      "id": "c1d49061-e962-40ac-b6fa-486ad034b65e",
       "name": "Validate & Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1980,
-        0
+        -448,
+        192
       ],
       "notesInFlow": true,
       "notes": "Accepts customer message_created events and Chatwoot interactive message_updated submissions."
@@ -59,13 +59,13 @@
         },
         "options": {}
       },
-      "id": "rag-if-continue",
+      "id": "cdfa3fea-1d23-4ab6-b799-422557dc8c39",
       "name": "Continue?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1760,
-        0
+        -224,
+        192
       ]
     },
     {
@@ -74,26 +74,26 @@
         "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'skip' }) }}",
         "options": {}
       },
-      "id": "rag-respond-skip",
+      "id": "1a1da259-482d-40fb-86ca-37fbc3e8a8d0",
       "name": "Respond OK (skip)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        -1540,
-        -180
+        0,
+        0
       ]
     },
     {
       "parameters": {
         "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.seenMessages) staticData.seenMessages = {};\nif (!staticData.convDebounce) staticData.convDebounce = {};\n\nconst item = $input.first().json;\nconst messageId = String(item.messageId);\nconst convId = String(item.conversationId);\nconst now = Date.now();\nconst windowMs = Number($env.IDEMPOTENCY_WINDOW_MS || 120000);\nconst debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);\nconst isInteractiveSubmission = item.isInteractiveSubmission === true;\nfor (const k of Object.keys(staticData.seenMessages)) {\n  if (now - staticData.seenMessages[k] > windowMs) delete staticData.seenMessages[k];\n}\nif (staticData.seenMessages[messageId]) return [{ json: { ...item, skip: true, reason: 'duplicate_message' } }];\nconst last = staticData.convDebounce[convId] || 0;\nif (!isInteractiveSubmission && now - last < debounceMs) return [{ json: { ...item, skip: true, reason: 'conversation_debounce' } }];\nstaticData.seenMessages[messageId] = now;\nif (!isInteractiveSubmission) staticData.convDebounce[convId] = now;\nreturn [{ json: { ...item, skip: false } }];\n"
       },
-      "id": "rag-code-idempotency",
+      "id": "2169a990-e1ef-4d8e-9fb5-918c162d3c26",
       "name": "Idempotency & Debounce",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1540,
-        80
+        0,
+        272
       ]
     },
     {
@@ -120,13 +120,13 @@
         },
         "options": {}
       },
-      "id": "rag-if-not-dup",
+      "id": "38dd86cc-cb2f-4ee2-bcde-f2eaf3e5c099",
       "name": "Not duplicate?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1320,
-        80
+        224,
+        272
       ]
     },
     {
@@ -135,13 +135,13 @@
         "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'dup' }) }}",
         "options": {}
       },
-      "id": "rag-respond-dup",
+      "id": "1dc34468-d9e5-45a0-b32c-a96714718e4f",
       "name": "Respond OK (dup)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        -1100,
-        -120
+        448,
+        64
       ]
     },
     {
@@ -160,13 +160,13 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-conversation",
+      "id": "9880f6c0-d5e8-4dcc-889b-407e9de1830a",
       "name": "Chatwoot Get Conversation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -1100,
-        120
+        448,
+        304
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -200,13 +200,13 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-messages",
+      "id": "4c53f605-9348-426f-ae10-b62bbfc39a94",
       "name": "Chatwoot List Messages",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -880,
-        120
+        672,
+        304
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -227,30 +227,30 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-contact",
+      "id": "6830e2d9-7bef-4817-9903-f9b203c18d6f",
       "name": "Chatwoot Get Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -660,
-        120
+        880,
+        304
       ],
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
       "notesInFlow": true,
+      "onError": "continueRegularOutput",
       "notes": "No-op-ish when contactId absent; onError keeps workflow fail-closed downstream."
     },
     {
       "parameters": {
         "jsCode": "const base = $('Idempotency & Debounce').first().json;\nconst conversation = $('Chatwoot Get Conversation').first().json || {};\nconst messagesResponse = $('Chatwoot List Messages').first().json || {};\nconst contact = $input.first().json || {};\nconst contactFetchFailed = Boolean(base.contactId && contact.error);\nconst contextFailed = Boolean(conversation.error || messagesResponse.error || contactFetchFailed);\n\nconst source = messagesResponse.payload ?? messagesResponse.data ?? messagesResponse;\nlet list = [];\nif (Array.isArray(source)) list = source;\nelse if (Array.isArray(source?.payload)) list = source.payload;\nelse if (Array.isArray(source?.data?.payload)) list = source.data.payload;\n\nconst recent = list.filter((m) => m && String(m.content || '').trim() && m.private !== true && m.private !== 'true').slice(-12);\nconst transcript = recent.map((m) => {\n  const mt = m.message_type;\n  const inbound = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\n  return `${inbound ? 'customer' : 'agent'}: ${String(m.content || '').trim()}`;\n}).join('\\n');\n\nconst labels = conversation.labels || conversation.payload?.labels || [];\nconst customAttributes = conversation.custom_attributes || conversation.payload?.custom_attributes || {};\nconst additionalAttributes = conversation.additional_attributes || conversation.payload?.additional_attributes || {};\nreturn [{ json: { ...base, conversation, contact: base.contactId ? contact : {}, transcript, labels, customAttributes, additionalAttributes, contextFailed } }];\n"
       },
-      "id": "rag-code-context",
+      "id": "ce993152-6490-4e2e-9801-791f3d78d84a",
       "name": "Build Chatwoot Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -440,
-        120
+        1104,
+        304
       ],
       "notesInFlow": true,
       "notes": "Loads conversation, recent messages, contact, labels, and attributes."
@@ -259,26 +259,26 @@
       "parameters": {
         "jsCode": "const text = String($json.userText || '').toLowerCase();\nconst flags = [];\nconst labels = [];\nif (/\\b(human|agent|person|representative)\\b/.test(text)) flags.push('human_requested');\nif (/\\b(password|token|secret|api key|credential|ssn|card number)\\b/.test(text)) flags.push('credential_shared');\nif (/\\b(refund|chargeback|dispute|invoice|charged)\\b/.test(text)) { flags.push('billing_dispute'); labels.push('billing'); }\nif (/\\b(lawyer|legal|sue|lawsuit|compliance)\\b/.test(text)) flags.push('legal');\nif (/\\b(security|breach|hacked|vulnerability|data leak)\\b/.test(text)) flags.push('security');\nif (/\\b(delete my data|gdpr|privacy request|erase my data)\\b/.test(text)) flags.push('data_deletion');\nreturn [{ json: { ...$json, guardrailRiskFlags: flags, guardrailLabels: labels } }];\n"
       },
-      "id": "rag-code-intent",
+      "id": "78800490-43e6-4dd2-b39d-f79c174e3352",
       "name": "Guardrail Precheck",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        120
+        1328,
+        304
       ]
     },
     {
       "parameters": {
         "jsCode": "const staticData = $getWorkflowStaticData('global');\nif (!staticData.failedTurns) staticData.failedTurns = {};\nconst item = $input.first().json;\nconst key = String(item.conversationId);\nconst failed = item.action === 'handoff' || Number(item.confidence || 0) < 0.75;\nconst count = failed ? Number(staticData.failedTurns[key] || 0) + 1 : 0;\nstaticData.failedTurns[key] = count;\nconst forceHandoff = count >= Number($env.FAILED_TURN_THRESHOLD || 2);\nif (forceHandoff && item.action !== 'handoff') {\n  return [{ json: { ...item, action: 'handoff', privateSummary: `${item.privateSummary} | forced_handoff_after_failed_turns=${count}`, labelSuggestions: Array.from(new Set([...(item.labelSuggestions || []), 'repeated_bot_failure'])) } }];\n}\nreturn [{ json: { ...item, failedTurnCount: count } }];\n"
       },
-      "id": "rag-code-failure-tracker",
+      "id": "85951a90-56b4-4c0a-9e5a-304b8bfe82f7",
       "name": "Failed Turn Tracker",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1540,
-        120
+        3088,
+        304
       ],
       "notesInFlow": true,
       "notes": "Hands off after FAILED_TURN_THRESHOLD failed bot turns per conversation."
@@ -296,7 +296,7 @@
             {
               "id": "cond-reply",
               "leftValue": "={{ $('Prepare RAG Guided State').first().json.action }}",
-              "rightValue": "reply",
+              "rightValue": "guided_reply",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -307,13 +307,13 @@
         },
         "options": {}
       },
-      "id": "rag-if-action",
+      "id": "4e76ddd3-7607-46eb-8adf-10c240521ec5",
       "name": "Action is reply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2200,
-        120
+        3744,
+        304
       ]
     },
     {
@@ -340,13 +340,13 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-labels",
+      "id": "c21d627b-c8f2-4df7-9e7a-9519585dba97",
       "name": "Chatwoot Add Labels",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2420,
-        240
+        3968,
+        432
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -375,13 +375,13 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-private-note",
+      "id": "0678fabf-1e58-447e-ada7-de349b43bd19",
       "name": "Chatwoot Private Note",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2640,
-        240
+        4192,
+        432
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -410,13 +410,13 @@
           "timeout": 30000
         }
       },
-      "id": "rag-http-patch-conv",
+      "id": "cbed6636-d33e-466e-a1b2-0277c634835b",
       "name": "Chatwoot Open + Assign",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2860,
-        240
+        4400,
+        432
       ],
       "alwaysOutputData": true,
       "onError": "continueRegularOutput"
@@ -427,13 +427,13 @@
         "responseBody": "={{ JSON.stringify({ ok: true, action: $('Prepare RAG Guided State').first().json.action }) }}",
         "options": {}
       },
-      "id": "rag-respond-final-main",
+      "id": "2d7bbc89-4411-4a74-a12a-2cbbefb06b5d",
       "name": "Respond OK (handled)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2860,
-        0
+        4400,
+        192
       ]
     },
     {
@@ -442,196 +442,168 @@
         "responseBody": "={{ JSON.stringify({ ok: true, action: $('Prepare RAG Guided State').first().json.action }) }}",
         "options": {}
       },
-      "id": "rag-respond-final-esc",
+      "id": "f869b9a7-c64a-4a00-8e4a-4921e0d99572",
       "name": "Respond OK (handoff)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        3080,
-        240
+        4624,
+        432
       ]
     },
     {
-      "id": "rag-code-merge-guided",
+      "parameters": {
+        "jsCode": "const stateKey = 'n8n_guided_flow';\nfunction asObject(value) {\n  if (!value) return {};\n  if (typeof value === 'string') {\n    try { return JSON.parse(value); } catch (e) { return {}; }\n  }\n  return typeof value === 'object' ? value : {};\n}\nconst item = $input.first().json;\nconst customAttributes = asObject(item.customAttributes);\nconst guidedState = asObject(customAttributes[stateKey]);\nconst path = Array.isArray(guidedState.path) ? [...guidedState.path] : [];\nconst slots = guidedState.slots && typeof guidedState.slots === 'object' ? { ...guidedState.slots } : {};\nlet next = {\n  flow_version: 2,\n  mode: 'rag_guided',\n  topic: guidedState.topic || null,\n  path,\n  slots,\n  last_step_type: guidedState.last_step_type || null,\n  llm_turns: Number(guidedState.llm_turns || 0),\n  updated_at: guidedState.updated_at || null,\n};\nif (item.isInteractiveSubmission) {\n  const entries = Array.isArray(item.submittedValues) ? item.submittedValues : [];\n  const first = entries[0];\n  let selection = '';\n  if (first && typeof first === 'object') selection = String(first.value || first.payload || first.name || first.title || '').trim();\n  else if (first) selection = String(first).trim();\n  if (item.interactiveContentType === 'form' && entries.length) {\n    entries.forEach((entry, index) => {\n      if (!entry || typeof entry !== 'object') return;\n      const key = entry.name || entry.id || entry.key || 'field_' + (index + 1);\n      slots[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n    });\n    next.path.push('form:' + JSON.stringify(slots));\n  } else if (selection) {\n    next.path.push(selection);\n    if (!next.topic && next.path.length === 1) next.topic = selection;\n    else slots.last_selection = selection;\n  }\n}\nconst text = String(item.userText || '').trim();\nconst stateBits = [text, next.topic, next.path.join(' '), JSON.stringify(next.slots || {})].filter(Boolean).join(' ');\nconst ragQuery = stateBits.trim() || text || 'customer support';\nreturn [{ json: { ...item, guidedState: next, ragQuery } }];"
+      },
+      "id": "5365890f-7f80-4215-b3b6-eedbcc46c55f",
       "name": "Merge Guided State",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const stateKey = 'n8n_guided_flow';\nfunction asObject(value) {\n  if (!value) return {};\n  if (typeof value === 'string') {\n    try { return JSON.parse(value); } catch (e) { return {}; }\n  }\n  return typeof value === 'object' ? value : {};\n}\nconst item = $input.first().json;\nconst customAttributes = asObject(item.customAttributes);\nconst guidedState = asObject(customAttributes[stateKey]);\nconst path = Array.isArray(guidedState.path) ? [...guidedState.path] : [];\nconst slots = guidedState.slots && typeof guidedState.slots === 'object' ? { ...guidedState.slots } : {};\nlet next = {\n  flow_version: 2,\n  mode: 'rag_guided',\n  topic: guidedState.topic || null,\n  path,\n  slots,\n  last_step_type: guidedState.last_step_type || null,\n  llm_turns: Number(guidedState.llm_turns || 0),\n  updated_at: guidedState.updated_at || null,\n};\nif (item.isInteractiveSubmission) {\n  const entries = Array.isArray(item.submittedValues) ? item.submittedValues : [];\n  const first = entries[0];\n  let selection = '';\n  if (first && typeof first === 'object') selection = String(first.value || first.payload || first.name || first.title || '').trim();\n  else if (first) selection = String(first).trim();\n  if (item.interactiveContentType === 'form' && entries.length) {\n    entries.forEach((entry, index) => {\n      if (!entry || typeof entry !== 'object') return;\n      const key = entry.name || entry.id || entry.key || 'field_' + (index + 1);\n      slots[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n    });\n    next.path.push('form:' + JSON.stringify(slots));\n  } else if (selection) {\n    next.path.push(selection);\n    if (!next.topic && next.path.length === 1) next.topic = selection;\n    else slots.last_selection = selection;\n  }\n}\nconst text = String(item.userText || '').trim();\nconst stateBits = [text, next.topic, next.path.join(' '), JSON.stringify(next.slots || {})].filter(Boolean).join(' ');\nconst ragQuery = stateBits.trim() || text || 'customer support';\nreturn [{ json: { ...item, guidedState: next, ragQuery } }];"
-      }
+        1552,
+        304
+      ]
     },
     {
-      "id": "rag-pinecone-load",
-      "name": "Pinecone Vector Store",
-      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
-      "typeVersion": 1.3,
-      "position": [
-        220,
-        120
-      ],
       "parameters": {
         "mode": "load",
         "pineconeIndex": {
           "__rl": true,
-          "mode": "id",
-          "value": "={{ $env.PINECONE_INDEX }}"
+          "value": "=pro-golf-support",
+          "mode": "id"
         },
         "prompt": "={{ $json.ragQuery }}",
-        "topK": "={{ Number($env.RAG_TOP_K || 5) }}",
-        "includeDocumentMetadata": true,
+        "topK": "=5",
         "options": {
-          "pineconeNamespace": "={{ $env.PINECONE_NAMESPACE || '' }}"
+          "pineconeNamespace": "="
         }
       },
-      "credentials": {
-        "pineconeApi": {
-          "id": "__REPLACE_ME__",
-          "name": "Pinecone account"
-        }
-      }
+      "id": "d7f7ca37-1eee-463d-8fb8-aa5dd49b855e",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1744,
+        304
+      ]
     },
     {
-      "id": "rag-embeddings-openai",
+      "parameters": {
+        "model": "=text-embedding-3-small",
+        "options": {}
+      },
+      "id": "f7a25681-117d-4760-b287-89dd497bfb38",
       "name": "Embeddings OpenAI",
       "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
       "typeVersion": 1.2,
       "position": [
-        220,
-        340
-      ],
-      "parameters": {
-        "model": "={{ $env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small' }}"
-      },
-      "credentials": {
-        "openAiApi": {
-          "id": "__REPLACE_ME__",
-          "name": "OpenAI account"
-        }
-      }
+        1760,
+        528
+      ]
     },
     {
-      "id": "rag-code-build-rag-context",
+      "parameters": {
+        "jsCode": "const upstream = $('Merge Guided State').first().json;\nconst minScore = Number($env.RAG_MIN_SCORE || 0.60);\nconst items = $input.all();\nconst chunks = [];\nfor (const item of items) {\n  const json = item.json || {};\n  const doc = json.document || json;\n  const meta = doc.metadata || json.metadata || {};\n  const score = typeof json.score === 'number' ? json.score : (typeof meta.score === 'number' ? meta.score : 0);\n  const id = meta.doc_id || meta.id || doc.id || json.id || ('chunk-' + (chunks.length + 1));\n  chunks.push({\n    id: String(id),\n    score,\n    title: meta.title || doc.title || meta.topic || id,\n    body: typeof doc.pageContent === 'string' ? doc.pageContent : (typeof doc.text === 'string' ? doc.text : (typeof meta.body === 'string' ? meta.body : '')),\n    topic: meta.topic || null,\n    game_contexts: Array.isArray(meta.game_contexts) ? meta.game_contexts : [],\n    tips: Array.isArray(meta.tips) ? meta.tips : [],\n    metadata: meta,\n  });\n}\nchunks.sort((a, b) => b.score - a.score);\nconst maxScore = chunks.reduce((max, c) => Math.max(max, typeof c.score === 'number' ? c.score : 0), 0);\nconst retrieval = { inScope: chunks.length > 0 && maxScore >= minScore, maxScore, chunkIds: chunks.map((c) => c.id), chunkCount: chunks.length, minScore };\nreturn [{ json: { ...upstream, ragChunks: chunks, retrieval, ragContext: JSON.stringify(chunks, null, 2) } }];"
+      },
+      "id": "e91bc180-fc2d-4b1a-bafa-2ffd0f6ae34f",
       "name": "Build RAG Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const upstream = $('Merge Guided State').first().json;\nconst minScore = Number($env.RAG_MIN_SCORE || 0.72);\nconst items = $input.all();\nconst chunks = [];\nfor (const item of items) {\n  const json = item.json || {};\n  const doc = json.document || json;\n  const meta = doc.metadata || json.metadata || {};\n  const score = typeof json.score === 'number' ? json.score : (typeof meta.score === 'number' ? meta.score : 0);\n  const id = meta.doc_id || meta.id || doc.id || json.id || ('chunk-' + (chunks.length + 1));\n  chunks.push({\n    id: String(id),\n    score,\n    title: meta.title || doc.title || meta.topic || id,\n    body: typeof doc.pageContent === 'string' ? doc.pageContent : (typeof doc.text === 'string' ? doc.text : (typeof meta.body === 'string' ? meta.body : '')),\n    topic: meta.topic || null,\n    game_contexts: Array.isArray(meta.game_contexts) ? meta.game_contexts : [],\n    tips: Array.isArray(meta.tips) ? meta.tips : [],\n    metadata: meta,\n  });\n}\nchunks.sort((a, b) => b.score - a.score);\nconst maxScore = chunks.reduce((max, c) => Math.max(max, typeof c.score === 'number' ? c.score : 0), 0);\nconst retrieval = { inScope: chunks.length > 0 && maxScore >= minScore, maxScore, chunkIds: chunks.map((c) => c.id), chunkCount: chunks.length, minScore };\nreturn [{ json: { ...upstream, ragChunks: chunks, retrieval, ragContext: JSON.stringify(chunks, null, 2) } }];"
-      }
+        1984,
+        304
+      ]
     },
     {
-      "id": "rag-code-planner-input",
+      "parameters": {
+        "jsCode": "const requiredJson = '{\"in_scope\":true,\"topic\":\"string\",\"step_type\":\"options|text|handoff\",\"prompt\":\"string\",\"options\":[{\"id\":\"string\",\"text\":\"string\"}],\"tips\":[\"string\"],\"confidence\":0.0,\"needs_human\":false,\"knowledge_used\":[\"string\"],\"private_summary\":\"string\"}';\nconst item = $input.first().json;\nconst plannerPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '',\n  'You are a support flow planner. Use retrieved knowledge chunks only.',\n  'If chunks are weak or unrelated, set in_scope false and step_type handoff.',\n  'For step_type options: options MUST come from game_contexts in chunk metadata when present; do not invent locations.',\n  'Include 1-3 short troubleshooting tips from chunk tips/body in tips array.',\n  'Never ask for passwords, payment card numbers, or secrets.',\n  '',\n  'Latest customer message:', item.userText,\n  'RAG query:', item.ragQuery,\n  'Retrieval in scope:', String(item.retrieval?.inScope),\n  'Retrieval max score:', String(item.retrieval?.maxScore),\n  '',\n  'Guided state:', JSON.stringify(item.guidedState || {}),\n  'Guardrail flags:', JSON.stringify(item.guardrailRiskFlags || []),\n  'Transcript:', item.transcript || '(empty)',\n  '',\n  'Retrieved knowledge chunks:', item.ragContext || '[]',\n].join('\\n');\nreturn [{ json: { ...item, plannerPrompt } }];"
+      },
+      "id": "5b448fc8-c0fe-413e-8bbb-5bbd4ad07448",
       "name": "Build Flow Planner Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const requiredJson = '{\"in_scope\":true,\"topic\":\"string\",\"step_type\":\"options|text|handoff\",\"prompt\":\"string\",\"options\":[{\"id\":\"string\",\"text\":\"string\"}],\"tips\":[\"string\"],\"confidence\":0.0,\"needs_human\":false,\"knowledge_used\":[\"string\"],\"private_summary\":\"string\"}';\nconst item = $input.first().json;\nconst plannerPrompt = [\n  'Return ONLY valid JSON matching this contract:', requiredJson,\n  '',\n  'You are a support flow planner. Use retrieved knowledge chunks only.',\n  'If chunks are weak or unrelated, set in_scope false and step_type handoff.',\n  'For step_type options: options MUST come from game_contexts in chunk metadata when present; do not invent locations.',\n  'Include 1-3 short troubleshooting tips from chunk tips/body in tips array.',\n  'Never ask for passwords, payment card numbers, or secrets.',\n  '',\n  'Latest customer message:', item.userText,\n  'RAG query:', item.ragQuery,\n  'Retrieval in scope:', String(item.retrieval?.inScope),\n  'Retrieval max score:', String(item.retrieval?.maxScore),\n  '',\n  'Guided state:', JSON.stringify(item.guidedState || {}),\n  'Guardrail flags:', JSON.stringify(item.guardrailRiskFlags || []),\n  'Transcript:', item.transcript || '(empty)',\n  '',\n  'Retrieved knowledge chunks:', item.ragContext || '[]',\n].join('\\n');\nreturn [{ json: { ...item, plannerPrompt } }];"
-      }
+        2208,
+        304
+      ]
     },
     {
-      "id": "rag-flow-planner-agent",
-      "name": "Flow Planner Agent",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.7,
-      "position": [
-        880,
-        120
-      ],
       "parameters": {
         "promptType": "define",
         "text": "={{ $json.plannerPrompt }}",
         "options": {
           "systemMessage": "You are a customer-support flow planner. Output only JSON. Use retrieved knowledge only. Options must come from game_contexts metadata when available. Set in_scope false and step_type handoff when knowledge does not cover the issue."
         }
-      }
+      },
+      "id": "3c42bfc7-99f2-4a64-ae81-a10197f9d9ee",
+      "name": "Flow Planner Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2384,
+        304
+      ]
     },
     {
-      "id": "rag-openai-model",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        880,
-        340
-      ],
       "parameters": {
         "model": {
           "__rl": true,
-          "mode": "id",
-          "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}"
+          "value": "=gpt-4o-mini",
+          "mode": "id"
         },
         "options": {
           "temperature": 0.2
         }
       },
-      "credentials": {
-        "openAiApi": {
-          "id": "__REPLACE_ME__",
-          "name": "OpenAI account"
-        }
-      }
+      "id": "472960b8-feef-4722-af19-3064f7309b8b",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2432,
+        528
+      ]
     },
     {
-      "id": "rag-code-parse-plan",
+      "parameters": {
+        "jsCode": "const upstream = $('Build Flow Planner Input').first().json;\nconst res = $input.first().json;\nconst text = res.output || res.text || res.response || res.content || res.json || '';\nlet plan = null;\nlet parseFailed = false;\nif (typeof text === 'object' && text !== null) plan = text;\nelse {\n  try { plan = JSON.parse(String(text).trim().replace(/^```json\\s*|\\s*```$/g, '')); }\n  catch (e) { parseFailed = true; }\n}\nif (parseFailed) plan = { in_scope: false, step_type: 'handoff', confidence: 0, needs_human: true, private_summary: 'Flow Planner returned non-JSON output' };\nreturn [{ json: { ...upstream, flowPlan: plan, planParseFailed: parseFailed } }];"
+      },
+      "id": "6a899ddc-c97b-4670-894f-bc10ebcd06b6",
       "name": "Parse Flow Plan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const upstream = $('Build Flow Planner Input').first().json;\nconst res = $input.first().json;\nconst text = res.output || res.text || res.response || res.content || res.json || '';\nlet plan = null;\nlet parseFailed = false;\nif (typeof text === 'object' && text !== null) plan = text;\nelse {\n  try { plan = JSON.parse(String(text).trim().replace(/^```json\\s*|\\s*```$/g, '')); }\n  catch (e) { parseFailed = true; }\n}\nif (parseFailed) plan = { in_scope: false, step_type: 'handoff', confidence: 0, needs_human: true, private_summary: 'Flow Planner returned non-JSON output' };\nreturn [{ json: { ...upstream, flowPlan: plan, planParseFailed: parseFailed } }];"
-      }
+        2640,
+        304
+      ]
     },
     {
-      "id": "rag-code-scope-safety",
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst plan = item.flowPlan || {};\nconst retrieval = item.retrieval || {};\nconst risk = new Set(Array.isArray(item.guardrailRiskFlags) ? item.guardrailRiskFlags : []);\nif (item.contextFailed) risk.add('tool_failed');\nif (item.planParseFailed) risk.add('tool_failed');\nif (!retrieval.inScope) risk.add('out_of_knowledge');\nconst handoffFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','unknown','out_of_knowledge'];\nconst confidence = typeof plan.confidence === 'number' ? plan.confidence : 0;\nconst inScope = plan.in_scope !== false;\nconst needsHuman = plan.needs_human === true;\nconst stepType = String(plan.step_type || 'text').toLowerCase();\nconst risky = [...risk].some((f) => handoffFlags.includes(f));\nconst shouldHandoff = item.planParseFailed || !retrieval.inScope || !inScope || needsHuman || stepType === 'handoff' || confidence < 0.7 || risky;\nconst action = shouldHandoff ? 'handoff' : 'guided_reply';\nconst guidedAction = action;\nconst knowledgeUsed = Array.isArray(plan.knowledge_used) ? plan.knowledge_used : [];\nconst summary = typeof plan.private_summary === 'string' && plan.private_summary.trim() ? plan.private_summary.trim() : 'RAG guided flow step.';\nreturn [{ json: {\n  ...item,\n  action,\n  guidedAction,\n  confidence,\n  riskFlags: Array.from(risk),\n  knowledgeUsed,\n  topic: typeof plan.topic === 'string' ? plan.topic : 'unknown',\n  publicAnswer: '',\n  labelSuggestions: Array.from(new Set([...(Array.isArray(plan.labels) ? plan.labels : []), 'rag_guided_bot'])),\n  privateSummary: [summary, 'action=' + action, 'topic=' + (plan.topic || 'unknown'), 'step_type=' + stepType, 'confidence=' + confidence, 'retrieval_in_scope=' + Boolean(retrieval.inScope), 'retrieval_max_score=' + (retrieval.maxScore || 0), 'knowledge_used=' + knowledgeUsed.join(','), 'risk_flags=' + Array.from(risk).join(',')].join(' | '),\n  flowPlan: plan,\n} }];"
+      },
+      "id": "de8c3466-e543-46ca-925b-19e759e8e4ea",
       "name": "Scope and Safety Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst plan = item.flowPlan || {};\nconst retrieval = item.retrieval || {};\nconst risk = new Set(Array.isArray(item.guardrailRiskFlags) ? item.guardrailRiskFlags : []);\nif (item.contextFailed) risk.add('tool_failed');\nif (item.planParseFailed) risk.add('tool_failed');\nif (!retrieval.inScope) risk.add('out_of_knowledge');\nconst handoffFlags = ['refund','billing_dispute','legal','security','data_deletion','angry_customer','human_requested','credential_shared','tool_failed','unknown','out_of_knowledge'];\nconst confidence = typeof plan.confidence === 'number' ? plan.confidence : 0;\nconst inScope = plan.in_scope !== false;\nconst needsHuman = plan.needs_human === true;\nconst stepType = String(plan.step_type || 'text').toLowerCase();\nconst risky = [...risk].some((f) => handoffFlags.includes(f));\nconst shouldHandoff = item.planParseFailed || !retrieval.inScope || !inScope || needsHuman || stepType === 'handoff' || confidence < 0.7 || risky;\nconst action = shouldHandoff ? 'handoff' : 'guided_reply';\nconst guidedAction = action;\nconst knowledgeUsed = Array.isArray(plan.knowledge_used) ? plan.knowledge_used : [];\nconst summary = typeof plan.private_summary === 'string' && plan.private_summary.trim() ? plan.private_summary.trim() : 'RAG guided flow step.';\nreturn [{ json: {\n  ...item,\n  action,\n  guidedAction,\n  confidence,\n  riskFlags: Array.from(risk),\n  knowledgeUsed,\n  topic: typeof plan.topic === 'string' ? plan.topic : 'unknown',\n  publicAnswer: '',\n  labelSuggestions: Array.from(new Set([...(Array.isArray(plan.labels) ? plan.labels : []), 'rag_guided_bot'])),\n  privateSummary: [summary, 'action=' + action, 'topic=' + (plan.topic || 'unknown'), 'step_type=' + stepType, 'confidence=' + confidence, 'retrieval_in_scope=' + Boolean(retrieval.inScope), 'retrieval_max_score=' + (retrieval.maxScore || 0), 'knowledge_used=' + knowledgeUsed.join(','), 'risk_flags=' + Array.from(risk).join(',')].join(' | '),\n  flowPlan: plan,\n} }];"
-      }
+        2864,
+        304
+      ]
     },
     {
-      "id": "rag-code-prepare-state",
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\nconst guided = item.guidedState || {};\nconst plan = item.flowPlan || {};\nconst nextGuidedState = {\n  flow_version: 2,\n  mode: 'rag_guided',\n  topic: (typeof plan.topic === 'string' && plan.topic) ? plan.topic : (guided.topic || null),\n  path: Array.isArray(guided.path) ? guided.path : [],\n  slots: guided.slots || {},\n  last_step_type: plan.step_type || null,\n  llm_turns: Number(guided.llm_turns || 0) + 1,\n  updated_at: now,\n};\nlet guidedMessageBody = null;\nif (item.action === 'guided_reply') {\n  const tips = Array.isArray(plan.tips) ? plan.tips.filter((t) => String(t).trim()) : [];\n  const tipsBlock = tips.length ? '\\n\\nQuick tips:\\n' + tips.map((t) => '• ' + t).join('\\n') : '';\n  const stepType = String(plan.step_type || 'text').toLowerCase();\n  if (stepType === 'options') {\n    const options = Array.isArray(plan.options) ? plan.options : [];\n    guidedMessageBody = {\n      content: (plan.prompt || 'Choose an option:') + tipsBlock,\n      message_type: 'outgoing',\n      private: false,\n      content_type: 'input_select',\n      content_attributes: { items: options.map((o) => ({ title: o.text || o.label || o.id, value: o.id || o.value || o.text })) },\n    };\n  } else {\n    guidedMessageBody = { content: (plan.prompt || plan.content || 'Here is what we found.') + tipsBlock, message_type: 'outgoing', private: false };\n  }\n}\nconst labelSuggestions = Array.from(new Set([...(item.labelSuggestions || []), 'rag_guided_flow']));\nconst privateSummary = [item.privateSummary || 'RAG guided flow.', 'guided_mode=' + nextGuidedState.mode, 'guided_topic=' + (nextGuidedState.topic || ''), 'llm_turns=' + nextGuidedState.llm_turns].join(' | ');\nreturn [{ json: { ...item, nextGuidedState, guidedMessageBody, labelSuggestions, privateSummary } }];"
+      },
+      "id": "63f1d96c-a288-4aec-9c4a-8756b6b1a9f0",
       "name": "Prepare RAG Guided State",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
-        120
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\nconst guided = item.guidedState || {};\nconst plan = item.flowPlan || {};\nconst nextGuidedState = {\n  flow_version: 2,\n  mode: 'rag_guided',\n  topic: (typeof plan.topic === 'string' && plan.topic) ? plan.topic : (guided.topic || null),\n  path: Array.isArray(guided.path) ? guided.path : [],\n  slots: guided.slots || {},\n  last_step_type: plan.step_type || null,\n  llm_turns: Number(guided.llm_turns || 0) + 1,\n  updated_at: now,\n};\nlet guidedMessageBody = null;\nif (item.action === 'guided_reply') {\n  const tips = Array.isArray(plan.tips) ? plan.tips.filter((t) => String(t).trim()) : [];\n  const tipsBlock = tips.length ? '\\n\\nQuick tips:\\n' + tips.map((t) => '• ' + t).join('\\n') : '';\n  const stepType = String(plan.step_type || 'text').toLowerCase();\n  if (stepType === 'options') {\n    const options = Array.isArray(plan.options) ? plan.options : [];\n    guidedMessageBody = {\n      content: (plan.prompt || 'Choose an option:') + tipsBlock,\n      message_type: 'outgoing',\n      private: false,\n      content_type: 'input_select',\n      content_attributes: { items: options.map((o) => ({ title: o.text || o.label || o.id, value: o.id || o.value || o.text })) },\n    };\n  } else {\n    guidedMessageBody = { content: (plan.prompt || plan.content || 'Here is what we found.') + tipsBlock, message_type: 'outgoing', private: false };\n  }\n}\nconst labelSuggestions = Array.from(new Set([...(item.labelSuggestions || []), 'rag_guided_flow']));\nconst privateSummary = [item.privateSummary || 'RAG guided flow.', 'guided_mode=' + nextGuidedState.mode, 'guided_topic=' + (nextGuidedState.topic || ''), 'llm_turns=' + nextGuidedState.llm_turns].join(' | ');\nreturn [{ json: { ...item, nextGuidedState, guidedMessageBody, labelSuggestions, privateSummary } }];"
-      }
+        3312,
+        304
+      ]
     },
     {
-      "id": "rag-http-update-state",
-      "name": "Chatwoot Update RAG Guided State",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1980,
-        120
-      ],
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare RAG Guided State').first().json.accountId + '/conversations/' + $('Prepare RAG Guided State').first().json.conversationId + '/custom_attributes' }}",
@@ -654,17 +626,19 @@
         "options": {
           "timeout": 30000
         }
-      }
-    },
-    {
-      "id": "rag-http-guided-reply",
-      "name": "Chatwoot RAG Guided Reply",
+      },
+      "id": "43a61f25-1221-49fb-af45-6083e4e77efd",
+      "name": "Chatwoot Update RAG Guided State",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2420,
-        0
+        3520,
+        304
       ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
       "parameters": {
         "method": "POST",
         "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Prepare RAG Guided State').first().json.accountId + '/conversations/' + $('Prepare RAG Guided State').first().json.conversationId + '/messages' }}",
@@ -687,22 +661,30 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "id": "12d78114-daf8-413b-b910-ba38fe44115c",
+      "name": "Chatwoot RAG Guided Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3968,
+        192
+      ]
     },
     {
-      "id": "rag-respond-guided",
-      "name": "Respond OK (guided)",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2640,
-        0
-      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify({ ok: true, action: $('Prepare RAG Guided State').first().json.action }) }}",
         "options": {}
-      }
+      },
+      "id": "10cd9db7-ed55-4957-9d53-7ca3648c88a9",
+      "name": "Respond OK (guided)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4192,
+        192
+      ]
     }
   ],
   "connections": {
@@ -1027,9 +1009,13 @@
   },
   "pinData": {},
   "meta": {
-    "templateId": "chatwoot-rag-guided-bot"
+    "templateCredsSetupCompleted": true
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
   }
 }

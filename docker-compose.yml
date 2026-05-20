@@ -1,6 +1,26 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chatwoot_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-chatwoot_bot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot_bot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatwoot_bot} -d ${POSTGRES_DB:-chatwoot_bot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${N8N_PORT:-5678}:5678"
     environment:
@@ -17,12 +37,27 @@ services:
       - CHATWOOT_ESCALATION_ASSIGNEE_ID=${CHATWOOT_ESCALATION_ASSIGNEE_ID:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-}
+      - PINECONE_INDEX=${PINECONE_INDEX:-pro-golf-support}
+      - PINECONE_NAMESPACE=${PINECONE_NAMESPACE:-}
+      - RAG_TOP_K=${RAG_TOP_K:-5}
+      - RAG_MIN_SCORE=${RAG_MIN_SCORE:-0.72}
+      - CLASSIFIER_MIN_CONFIDENCE=${CLASSIFIER_MIN_CONFIDENCE:-0.65}
       - IDEMPOTENCY_WINDOW_MS=${IDEMPOTENCY_WINDOW_MS:-120000}
       - CONVERSATION_DEBOUNCE_MS=${CONVERSATION_DEBOUNCE_MS:-2000}
       - FAILED_TURN_THRESHOLD=${FAILED_TURN_THRESHOLD:-2}
+      - BOT_DB_HOST=${BOT_DB_HOST:-postgres}
+      - BOT_DB_PORT=${BOT_DB_PORT:-5432}
+      - BOT_DB_NAME=${BOT_DB_NAME:-chatwoot_bot}
+      - BOT_DB_USER=${BOT_DB_USER:-chatwoot_bot}
+      - BOT_DB_PASSWORD=${BOT_DB_PASSWORD:-chatwoot_bot}
+      - BOT_DB_SSL=${BOT_DB_SSL:-false}
+      - DEFAULT_GUIDED_FLOW_ID=${DEFAULT_GUIDED_FLOW_ID:-support_main}
     volumes:
       - n8n_data:/home/node/.n8n
     restart: unless-stopped
 
 volumes:
   n8n_data:
+  postgres_data:

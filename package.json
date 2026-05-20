@@ -2,8 +2,12 @@
   "name": "chatwoot-n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs",
-    "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs"
+    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs",
+    "workflow:generate-postgres": "node scripts/generate-postgres-workflow.mjs",
+    "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs",
+    "rag:export-helpshift": "node scripts/export-helpshift-rag-md.mjs",
+    "rag:upsert-helpshift": "node --env-file=.env scripts/upsert-helpshift-rag.mjs",
+    "rag:upsert-helpshift:dry": "node --env-file=.env scripts/upsert-helpshift-rag.mjs --dry-run"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.2"

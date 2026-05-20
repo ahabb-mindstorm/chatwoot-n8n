@@ -30,6 +30,17 @@ These markdown files are written for **Pinecone (or similar vector) upload** to 
 | `12-shop-payments-referrals.md` | shop, purchase, deposit, referral, reimbursement |
 | `99-troubleshooting-lost-rewards.md` | lost reward, missing, not received, FAQ |
 
+## Helpshift export (`helpshift/`)
+
+English FAQs from Helpshift CSV (`en_faqs.csv`, 2026-05-19): **94** files, one per published FAQ.
+
+```bash
+npm run rag:export-helpshift    # regenerate rag/helpshift/*.md from CSV paths in script defaults
+npm run rag:upsert-helpshift  # embed + upsert to Pinecone (helpshift-faq-* ids)
+```
+
+See [`helpshift/README.md`](helpshift/README.md) for naming and Pinecone id conventions.
+
 ## Source of truth
 
 Content is derived from the Pro Golf Nakama server codebase (`src/modules/`) as of the documentation generation date. Config timers (daily reward expiry, inbox duration) are **config-driven** — tell players approximate behavior, not exact seconds unless you sync config values into metadata.

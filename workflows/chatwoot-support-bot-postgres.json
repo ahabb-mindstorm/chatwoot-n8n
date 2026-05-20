@@ -1,0 +1,1867 @@
+{
+  "name": "Chatwoot Support Bot Postgres (Agent Bot webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-support-bot-postgres",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "pg-webhook",
+      "name": "Webhook AgentBot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2400,
+        0
+      ],
+      "webhookId": "chatwoot-support-bot-postgres-ingest",
+      "notes": "Point Chatwoot Agent Bot outgoing_url here: WEBHOOK_URL/webhook/chatwoot-support-bot-postgres."
+    },
+    {
+      "parameters": {
+        "jsCode": "function lowerHeaders(headers) {\n  const result = {};\n  Object.keys(headers || {}).forEach((k) => { result[String(k).toLowerCase()] = headers[k]; });\n  return result;\n}\nfunction submittedEntries(attrs) {\n  const submitted = attrs.submitted_values || attrs.submittedValues || [];\n  if (Array.isArray(submitted)) return submitted;\n  if (submitted && typeof submitted === 'object') return Object.entries(submitted).map(([name, value]) => ({ name, value }));\n  return submitted ? [{ value: submitted }] : [];\n}\nfunction submissionValue(entries) {\n  const first = entries[0];\n  if (!first) return '';\n  if (typeof first === 'object') return first.value || first.payload || first.title || first.name || '';\n  return first;\n}\nfunction formData(entries) {\n  const data = {};\n  entries.forEach((entry, index) => {\n    if (!entry || typeof entry !== 'object') return;\n    const key = entry.name || entry.id || entry.key || `field_${index + 1}`;\n    data[key] = entry.value ?? entry.answer ?? entry.text ?? '';\n  });\n  return data;\n}\nconst root = $input.first().json;\nconst headers = lowerHeaders(root.headers);\nconst secret = $env.CHATWOOT_WEBHOOK_SECRET;\nif (secret) {\n  const got = headers['x-webhook-secret'] || headers['x-chatwoot-secret'];\n  if (String(got || '') !== String(secret)) return [{ json: { skip: true, reason: 'bad_secret' } }];\n}\nconst payload = root.body && typeof root.body === 'object' ? root.body : root;\nconst message = payload.message && typeof payload.message === 'object' ? payload.message : payload;\nconst contentType = message.content_type || payload.content_type;\nconst contentAttributes = message.content_attributes || payload.content_attributes || {};\nconst entries = submittedEntries(contentAttributes);\nconst selectedValue = submissionValue(entries);\nconst supportedSubmission = ['input_select', 'form'].includes(contentType) && entries.length > 0;\nconst hasInteractiveSubmission = payload.event === 'message_updated' && supportedSubmission;\nif (payload.event !== 'message_created' && !hasInteractiveSubmission) return [{ json: { skip: true, reason: 'unsupported_event' } }];\nconst conversation = payload.conversation || {};\nconst lastConversationMessage = Array.isArray(conversation.messages) ? (conversation.messages.find((item) => String(item.id) === String(message.id || payload.id)) || conversation.messages[0] || {}) : {};\nconst sender = message.sender || payload.sender || payload.contact || {};\nconst senderType = String(sender.type || message.sender_type || payload.sender_type || message.senderType || payload.senderType || lastConversationMessage.sender_type || lastConversationMessage.sender?.type || conversation.meta?.sender?.type || (payload.contact ? 'contact' : '')).toLowerCase();\nconst isContact = senderType === 'contact';\nconst mt = message.message_type ?? payload.message_type;\nconst isIncoming = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\nconst isPrivate = message.private === true || payload.private === true;\nif (isPrivate || (!hasInteractiveSubmission && (!isContact || !isIncoming))) return [{ json: { skip: true, reason: 'not_customer_incoming' } }];\nconst account = payload.account || {};\nconst inbox = payload.inbox || {};\nconst contact = payload.contact || ((senderType === 'contact' && sender.type) ? sender : undefined) || conversation.meta?.sender || lastConversationMessage.sender || {};\nconst accountId = account.id;\nconst conversationId = conversation.id || conversation.display_id || payload.conversation_id;\nconst baseMessageId = message.id || payload.id;\nconst deliveryId = headers['x-chatwoot-delivery'] || payload.updated_at || payload.created_at || '';\nconst interactiveText = contentType === 'form' ? JSON.stringify(formData(entries)) : String(selectedValue || '').trim();\nconst messageId = hasInteractiveSubmission ? `${baseMessageId}:${contentType}:${interactiveText}:${deliveryId}` : baseMessageId;\nconst userText = String(hasInteractiveSubmission ? interactiveText : (message.content || payload.content || '')).trim();\nconst contactId = contact.id || conversation.contact_inbox?.contact_id || lastConversationMessage.sender_id || 0;\nif (!accountId || !conversationId || !messageId) return [{ json: { skip: true, reason: 'missing_ids' } }];\nreturn [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId, senderType, isInteractiveSubmission: Boolean(hasInteractiveSubmission), interactiveContentType: hasInteractiveSubmission ? contentType : null, submittedValues: entries, rawPayload: payload, dedupeKey: `msg:${accountId}:${conversationId}:${messageId}` } }];"
+      },
+      "id": "pg-normalize",
+      "name": "Normalize Chatwoot Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2180,
+        0
+      ],
+      "notes": "Accepts customer message_created events and Chatwoot interactive message_updated submissions."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-continue-cond",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-continue",
+      "name": "Continue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'skip' }) }}"
+      },
+      "id": "pg-skip-resp",
+      "name": "Respond OK (skip)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1740,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $json.accountId + '/conversations/' + $json.conversationId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-get-conv",
+      "name": "Chatwoot Get Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1740,
+        120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Normalize Chatwoot Payload').first().json.accountId + '/conversations/' + $('Normalize Chatwoot Payload').first().json.conversationId + '/messages' }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "limit",
+              "value": "40"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-list-msg",
+      "name": "Chatwoot List Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1520,
+        120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Normalize Chatwoot Payload').first().json.accountId + '/contacts/' + ($('Normalize Chatwoot Payload').first().json.contactId || 0) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-get-contact",
+      "name": "Chatwoot Get Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1300,
+        120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "No-op-ish when contactId absent; onError keeps workflow fail-closed downstream."
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Normalize Chatwoot Payload').first().json;\nconst conversation = $('Chatwoot Get Conversation').first().json || {};\nconst messagesResponse = $('Chatwoot List Messages').first().json || {};\nconst contact = $input.first().json || {};\nconst contactFetchFailed = Boolean(base.contactId && contact.error);\nconst contextFailed = Boolean(conversation.error || messagesResponse.error || contactFetchFailed);\nconst source = messagesResponse.payload ?? messagesResponse.data ?? messagesResponse;\nlet list = [];\nif (Array.isArray(source)) list = source;\nelse if (Array.isArray(source?.payload)) list = source.payload;\nelse if (Array.isArray(source?.data?.payload)) list = source.data.payload;\nconst recent = list.filter((m) => m && String(m.content || '').trim() && m.private !== true && m.private !== 'true').slice(-12);\nconst transcript = recent.map((m) => {\n  const mt = m.message_type;\n  const inbound = mt === 0 || mt === '0' || String(mt).toLowerCase() === 'incoming';\n  return (inbound ? 'customer' : 'agent') + ': ' + String(m.content || '').trim();\n}).join('\\n');\nconst labels = conversation.labels || conversation.payload?.labels || [];\nconst customAttributes = conversation.custom_attributes || conversation.payload?.custom_attributes || {};\nreturn [{ json: { ...base, conversation, contact: base.contactId ? contact : {}, transcript, labels, customAttributes, contextFailed } }];"
+      },
+      "id": "pg-context",
+      "name": "Build Chatwoot Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1080,
+        120
+      ],
+      "notes": "Loads conversation, recent messages, contact, labels, and attributes."
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = String($json.userText || '').toLowerCase();\nconst flags = [];\nconst labels = [];\nif (/\\b(human|agent|person|representative)\\b/.test(text)) flags.push('human_requested');\nif (/\\b(password|token|secret|api key|credential|ssn|card number)\\b/.test(text)) flags.push('credential_shared');\nif (/\\b(refund|chargeback|dispute|invoice|charged)\\b/.test(text)) { flags.push('billing_dispute'); labels.push('billing'); }\nif (/\\b(lawyer|legal|sue|lawsuit|compliance)\\b/.test(text)) flags.push('legal');\nif (/\\b(security|breach|hacked|vulnerability|data leak)\\b/.test(text)) flags.push('security');\nif (/\\b(delete my data|gdpr|privacy request|erase my data)\\b/.test(text)) flags.push('data_deletion');\nreturn [{ json: { ...$json, guardrailRiskFlags: flags, guardrailLabels: labels } }];"
+      },
+      "id": "pg-guardrail",
+      "name": "Guardrail Precheck",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -860,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM bot_conversation_state WHERE account_id = {{ $json.accountId }} AND conversation_id = {{ $json.conversationId }} AND contact_id = {{ $json.contactId || 0 }} LIMIT 1;",
+        "options": {}
+      },
+      "id": "pg-load-state",
+      "name": "Load Bot State from Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -640,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__REPLACE_ME__",
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Normalize Chatwoot Payload').first().json;\nconst rows = $input.all().map((item) => item.json).filter((row) => row && row.id);\nconst dbState = rows[0] || null;\nconst postgresFailed = Boolean($input.first().json?.error);\nreturn [{ json: { ...base, dbState, postgresFailed, stateId: dbState?.id || null } }];"
+      },
+      "id": "pg-merge-state",
+      "name": "Merge Bot State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, context) VALUES ({{ $('Merge Bot State').first().json.accountId }}, {{ $('Merge Bot State').first().json.conversationId }}, {{ $('Merge Bot State').first().json.contactId || 0 }}, {{ $('Merge Bot State').first().json.messageId }}, 'message_received', {{ $('Merge Bot State').first().json.dedupeKey }}, '{{ JSON.stringify({ userText: $('Merge Bot State').first().json.userText }) }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
+        "options": {}
+      },
+      "id": "pg-idem-insert",
+      "name": "Idempotency / Debounce",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -200,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__REPLACE_ME__",
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Merge Bot State').first().json;\nconst insertRows = $input.all().map((item) => item.json).filter((row) => row && row.id);\nconst inserted = insertRows.length > 0;\nconst postgresFailed = Boolean(base.postgresFailed || $input.first().json?.error);\nif (postgresFailed) return [{ json: { ...base, route: 'human_handoff', action: 'handoff', postgresFailed: true, skip: false, duplicateMessage: false, privateSummary: 'Postgres idempotency failed; fail-closed handoff' } }];\nif (!inserted) return [{ json: { ...base, skip: true, reason: 'duplicate_message', duplicateMessage: true } }];\nconst debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);\nconst lastSeen = base.dbState?.last_seen_at ? Date.parse(base.dbState.last_seen_at) : 0;\nconst now = Date.now();\nif (!base.isInteractiveSubmission && lastSeen && now - lastSeen < debounceMs) {\n  return [{ json: { ...base, skip: true, reason: 'conversation_debounce', duplicateMessage: false } }];\n}\nreturn [{ json: { ...base, skip: false, duplicateMessage: false } }];"
+      },
+      "id": "pg-idem-code",
+      "name": "Apply Idempotency Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-idem-if-cond",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-idem-if",
+      "name": "Not duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, ignored: $json.reason || 'dup' }) }}"
+      },
+      "id": "pg-dup-resp",
+      "name": "Respond OK (dup)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-postgres-if-cond",
+              "leftValue": "={{ $json.postgresFailed }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-postgres-if",
+      "name": "Postgres OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst db = item.dbState || {};\nconst active = db.flow_status === 'active' && db.active_flow_id && db.bot_status !== 'handoff';\nreturn [{ json: { ...item, hasActiveFlow: Boolean(active) } }];"
+      },
+      "id": "pg-active-code",
+      "name": "Router: Active Flow?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-active-if-cond",
+              "leftValue": "={{ $json.hasActiveFlow }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-active-if",
+      "name": "Has active flow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const guidedFlow = {\n  \"version\": 1,\n  \"entry\": \"main\",\n  \"nodes\": {\n    \"main\": {\n      \"type\": \"options\",\n      \"prompt\": \"What can I help you with?\",\n      \"options\": [\n        {\n          \"id\": \"lost_reward\",\n          \"text\": \"Lost Reward\",\n          \"target\": \"lost_reward_form\"\n        },\n        {\n          \"id\": \"withdrawal\",\n          \"text\": \"Withdrawal\",\n          \"target\": \"withdrawal_menu\"\n        },\n        {\n          \"id\": \"custom\",\n          \"text\": \"Ask a custom question\",\n          \"target\": \"llm\"\n        },\n        {\n          \"id\": \"human\",\n          \"text\": \"Talk to a human\",\n          \"target\": \"human\"\n        }\n      ]\n    },\n    \"lost_reward_form\": {\n      \"type\": \"form\",\n      \"prompt\": \"Tell us about the lost reward.\",\n      \"fields\": [\n        {\n          \"id\": \"lost_location\",\n          \"label\": \"Where did you lose it?\",\n          \"type\": \"text\",\n          \"required\": true,\n          \"placeholder\": \"Game, screen, or reward name\"\n        }\n      ],\n      \"submitTarget\": \"human\"\n    },\n    \"withdrawal_menu\": {\n      \"type\": \"options\",\n      \"prompt\": \"Withdrawal help\",\n      \"options\": [\n        {\n          \"id\": \"withdrawal_timing\",\n          \"text\": \"How long does withdrawal take?\",\n          \"target\": \"withdrawal_timing_answer\"\n        },\n        {\n          \"id\": \"withdrawal_how\",\n          \"text\": \"How to withdraw\",\n          \"target\": \"withdrawal_how_answer\"\n        },\n        {\n          \"id\": \"withdrawal_problem\",\n          \"text\": \"Problem with withdraw\",\n          \"target\": \"withdrawal_problem_menu\"\n        }\n      ]\n    },\n    \"withdrawal_timing_answer\": {\n      \"type\": \"text\",\n      \"content\": \"Withdrawals take 2-3 days.\",\n      \"next\": \"resolution_check\"\n    },\n    \"withdrawal_how_answer\": {\n      \"type\": \"text\",\n      \"content\": \"Go to Settings, open Withdrawals, choose your method, then submit the withdrawal request.\",\n      \"next\": \"resolution_check\"\n    },\n    \"withdrawal_problem_menu\": {\n      \"type\": \"options\",\n      \"prompt\": \"What happened with the withdrawal?\",\n      \"options\": [\n        {\n          \"id\": \"withdrawal_too_long\",\n          \"text\": \"Taking too long\",\n          \"target\": \"withdrawal_problem_form\"\n        },\n        {\n          \"id\": \"withdrawal_errored\",\n          \"text\": \"Errored out\",\n          \"target\": \"withdrawal_problem_form\"\n        }\n      ]\n    },\n    \"withdrawal_problem_form\": {\n      \"type\": \"form\",\n      \"prompt\": \"Share withdrawal details so a human can investigate.\",\n      \"fields\": [\n        {\n          \"id\": \"withdrawal_id\",\n          \"label\": \"Withdrawal ID or account email\",\n          \"type\": \"text\",\n          \"required\": true\n        },\n        {\n          \"id\": \"problem_details\",\n          \"label\": \"What happened?\",\n          \"type\": \"text_area\",\n          \"required\": true\n        }\n      ],\n      \"submitTarget\": \"human\"\n    },\n    \"resolution_check\": {\n      \"type\": \"options\",\n      \"prompt\": \"Did this resolve your issue?\",\n      \"options\": [\n        {\n          \"id\": \"resolved_yes\",\n          \"text\": \"Yes, resolved\",\n          \"target\": \"resolved\"\n        },\n        {\n          \"id\": \"resolved_no\",\n          \"text\": \"No, talk to a human\",\n          \"target\": \"human\"\n        },\n        {\n          \"id\": \"another_question\",\n          \"text\": \"Ask another question\",\n          \"target\": \"llm\"\n        },\n        {\n          \"id\": \"show_menu\",\n          \"text\": \"Show menu again\",\n          \"target\": \"main\"\n        }\n      ]\n    },\n    \"resolved\": {\n      \"type\": \"text\",\n      \"content\": \"Glad I could help. If anything else comes up, send a new message and I will show the support menu again.\"\n    },\n    \"llm\": {\n      \"type\": \"llm\",\n      \"prompt\": \"Please describe the issue in your own words. I will try to help, and I will hand this to a human if we cannot resolve it.\"\n    },\n    \"human\": {\n      \"type\": \"human\"\n    }\n  }\n};\nreturn [{ json: { ...$json, guidedFlow, flowId: $env.DEFAULT_GUIDED_FLOW_ID || 'support_main' } }];"
+      },
+      "id": "pg-fetch-flow",
+      "name": "Fetch Guided Flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        80
+      ],
+      "notes": "Temporary API stand-in: returns dynamic guided flow JSON. Replace with HTTP Request later."
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('Apply Idempotency Result').first().json;\nconst flow = $('Fetch Guided Flow').first().json.guidedFlow;\nconst flowId = $('Fetch Guided Flow').first().json.flowId || ($env.DEFAULT_GUIDED_FLOW_ID || 'support_main');\n\nfunction slug(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');}\nfunction submittedEntries(item){if(Array.isArray(item.submittedValues))return item.submittedValues;const p=item.rawPayload||{};const a=p.message?.content_attributes||p.content_attributes||{};const s=a.submitted_values||a.submittedValues||[];if(Array.isArray(s))return s;if(s&&typeof s==='object')return Object.entries(s).map(([n,v])=>({name:n,value:v}));return s?[{value:s}]:[];}\nfunction firstSubmittedValue(e){const f=e[0];if(!f)return'';if(typeof f==='object')return f.value||f.payload||f.name||f.title||'';return f;}\nfunction collectFormData(e){const d={};e.forEach((x,i)=>{if(!x||typeof x!=='object')return;const k=x.name||x.id||x.key||'field_'+(i+1);d[k]=x.value??x.answer??x.text??'';});return d;}\nfunction menuBody(c,o){return{content:c,message_type:'outgoing',private:false,content_type:'input_select',content_attributes:{items:(o||[]).map(x=>({title:x.text,value:x.id}))}};}\nfunction formBody(n){const m={textarea:'text_area',text_area:'text_area',email:'email',select:'select',text:'text'};return{content:n.prompt||'Please provide details.',message_type:'outgoing',private:false,content_type:'form',content_attributes:{items:(n.fields||[]).map(f=>({name:f.id,label:f.label||f.id,type:m[f.type]||'text',placeholder:f.placeholder||'',required:f.required===true}))}};}\nfunction textBody(c){return{content:c,message_type:'outgoing',private:false};}\nfunction validateFlow(f){return f&&f.entry&&f.nodes&&f.nodes[f.entry];}\nfunction findOption(n,raw,text){const o=Array.isArray(n?.options)?n.options:[];const d=String(raw||'').trim();const s=slug(d||text);return o.find(x=>x.id===d||slug(x.id)===s||slug(x.text)===s);}\nfunction emptyFlowState(f){return{flow_version:f.version||1,current_node:f.entry,path:[],form_data:{},llm_turns:0,selected_option:null,mode:null,step:null,resolved:false};}\nfunction runGuidedFlow({flow,item,dbState,startNew,flowId}){const now=new Date().toISOString();const stored=dbState?.flow_state&&typeof dbState.flow_state==='object'?dbState.flow_state:{};const baseState=startNew?emptyFlowState(flow):{flow_version:stored.flow_version||flow.version||1,current_node:stored.current_node||dbState?.current_node||flow.entry,path:Array.isArray(stored.path)?stored.path:[],form_data:stored.form_data&&typeof stored.form_data==='object'?stored.form_data:{},llm_turns:Number(stored.llm_turns||0),selected_option:stored.selected_option||null,mode:stored.mode||dbState?.current_step||null,step:stored.step||null,resolved:stored.resolved===true};\nfunction handoff(reason,nodeId,extra={}){const state={...baseState,current_node:nodeId||baseState.current_node||flow.entry,mode:'handoff',step:reason,last_action:reason,resolved:false,updated_at:now,...extra.state};return{guidedAction:'handoff',action:'handoff',route:'human_handoff',nextFlowState:state,guidedMessageBody:null,activeFlowId:flowId,flowVersion:flow.version||1,currentNode:state.current_node,currentStep:state.step,botStatus:'handoff',flowStatus:'handoff',caseType:extra.caseType||'guided_flow',intent:reason,labelSuggestions:Array.from(new Set([...(item.guardrailLabels||[]),'guided_flow',...(extra.labels||[])])),privateSummary:extra.summary||('Guided handoff '+reason),pendingSubmission:extra.pendingSubmission||null};}\nfunction renderNode(nodeId,patch={}){const node=flow.nodes[nodeId];if(!node)return handoff('guided_flow_missing_node',nodeId);const common={...baseState,current_node:nodeId,mode:node.type,step:node.type,last_action:'show_'+node.type,resolved:false,updated_at:now,...patch};\nif(node.type==='options')return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:common,guidedMessageBody:menuBody(node.prompt||'Choose an option.',node.options||[]),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'options',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided options '+nodeId,pendingSubmission:null};\nif(node.type==='form')return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:common,guidedMessageBody:formBody(node),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'form',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided form '+nodeId,pendingSubmission:null};\nif(node.type==='text'){if(node.next&&flow.nodes[node.next]?.type==='options'){const nx=flow.nodes[node.next];const st={...common,current_node:node.next,mode:'options',step:'options',last_action:'show_text_with_options'};return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:st,guidedMessageBody:menuBody([node.content||'',nx.prompt||'Choose an option.'].filter(Boolean).join('\\\\n\\\\n'),nx.options||[]),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:node.next,currentStep:'options',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided text/options',pendingSubmission:null};}\nconst resolved=nodeId==='resolved';return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:{...common,resolved},guidedMessageBody:textBody(node.content||'Done.'),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'text',botStatus:resolved?'idle':'active',flowStatus:resolved?'completed':'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided text '+nodeId,pendingSubmission:null};}\nif(node.type==='llm'){const st={...common,mode:'llm',step:'awaiting_custom',selected_option:patch.selected_option||baseState.selected_option||'custom'};const cid=baseState.current_node||flow.entry;const ent=submittedEntries(item);const sub=firstSubmittedValue(ent);const entering=startNew||cid!==nodeId||sub||patch.last_action==='option_selected';if(entering)return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:st,guidedMessageBody:textBody(node.prompt||'Describe your issue.'),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'awaiting_custom',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided llm prompt',pendingSubmission:null};return{guidedAction:'llm',action:'faq',route:'faq',nextFlowState:{...st,step:'llm_support'},guidedMessageBody:null,activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'llm_support',botStatus:'active',flowStatus:'active',caseType:'faq',intent:'faq',labelSuggestions:['guided_flow'],privateSummary:'Guided custom to FAQ',pendingSubmission:null};}\nif(node.type==='human')return handoff('human_requested',nodeId,{labels:['human_requested']});return handoff('guided_flow_unknown_type',nodeId);}\nif(!validateFlow(flow))return handoff('guided_flow_invalid_config',flow.entry||'unknown');\nif((item.guardrailRiskFlags||[]).includes('human_requested'))return renderNode('human');\nconst entries=submittedEntries(item);const submitted=firstSubmittedValue(entries);const formData=collectFormData(entries);const currentNodeId=baseState.current_node||flow.entry;const currentNode=flow.nodes[currentNodeId]||flow.nodes[flow.entry];const text=String(item.userText||'').trim();const greetingOnly=/^(hi|hello|hey|start|help|menu)$/i.test(text)||!text;\nif(item.interactiveContentType==='form'&&currentNode?.type==='form'&&Object.keys(formData).length){const nextFormData={...baseState.form_data,[currentNodeId]:formData};const target=currentNode.submitTarget||currentNode.next||'human';const pendingSubmission={flow_id:flowId,flow_version:flow.version||1,node_id:currentNodeId,submission_key:item.accountId+':'+item.conversationId+':'+item.messageId+':form:'+currentNodeId,fields:formData,raw_submission:entries,source_message_id:String(item.messageId)};return renderNode(target,{form_data:nextFormData,path:[...baseState.path,currentNodeId+':submitted'],last_action:'form_submitted',pendingSubmission});}\nif(currentNode?.type==='options'){const option=findOption(currentNode,submitted,text);if(option)return renderNode(option.target,{selected_option:option.id,path:[...baseState.path,option.id],last_action:'option_selected'});}\nif(startNew||!dbState?.active_flow_id||baseState.resolved||greetingOnly)return renderNode(flow.entry,{path:[],form_data:{},selected_option:null,llm_turns:0});\nif(currentNode?.type==='llm'&&text&&!submitted)return renderNode(currentNodeId);\nreturn renderNode(flow.entry,{path:[],selected_option:null});}\nconst result = runGuidedFlow({ flow, item, dbState: item.dbState, startNew: false, flowId });\nreturn [{ json: { ...item, ...result, classifier: null } }];"
+      },
+      "id": "pg-continue-flow",
+      "name": "Continue Guided Flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        80
+      ],
+      "notes": "Interprets guidedFlow JSON into options, forms, text, LLM handoff, or human handoff using Postgres dbState."
+    },
+    {
+      "parameters": {
+        "jsCode": "const schema = {\"type\":\"object\",\"properties\":{\"route\":{\"type\":\"string\",\"enum\":[\"guided_flow\",\"faq\",\"human_handoff\",\"clarification\"]},\"intent\":{\"type\":\"string\"},\"case_type\":{\"type\":\"string\"},\"confidence\":{\"type\":\"number\"},\"risk_flags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"flow_id\":{\"type\":\"string\"},\"labels\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"summary\":{\"type\":\"string\"},\"requires_human\":{\"type\":\"boolean\"}},\"required\":[\"route\",\"intent\",\"confidence\",\"requires_human\"]};\nconst prompt = [\n  'Classify the customer message into one route: guided_flow, faq, human_handoff, clarification.',\n  'Return JSON only matching this schema:', JSON.stringify(schema),\n  'Use clarification when intent is ambiguous. Use human_handoff for policy/risk issues.',\n  'Latest message:', $json.userText,\n  'Transcript:', $json.transcript || '(empty)',\n  'Guardrails:', JSON.stringify($json.guardrailRiskFlags || []),\n  'Existing bot state:', JSON.stringify($json.dbState || {})\n].join('\\n');\nreturn [{ json: { ...$json, classifierPrompt: prompt } }];"
+      },
+      "id": "pg-classifier-input",
+      "name": "Build Classifier Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.classifierPrompt }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a support intent classifier. Output only JSON matching the schema."
+        }
+      },
+      "id": "pg-classifier-agent",
+      "name": "Classify Message",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1340,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}"
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "pg-classifier-model",
+      "name": "OpenAI Classifier Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        540
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "__REPLACE_ME__",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"route\":{\"type\":\"string\",\"enum\":[\"guided_flow\",\"faq\",\"human_handoff\",\"clarification\"]},\"intent\":{\"type\":\"string\"},\"case_type\":{\"type\":\"string\"},\"confidence\":{\"type\":\"number\"},\"risk_flags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"flow_id\":{\"type\":\"string\"},\"labels\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"summary\":{\"type\":\"string\"},\"requires_human\":{\"type\":\"boolean\"}},\"required\":[\"route\",\"intent\",\"confidence\",\"requires_human\"]}"
+      },
+      "id": "pg-classifier-parser",
+      "name": "Classifier Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const upstream = $('Build Classifier Input').first().json;\nconst res = $input.first().json;\nconst raw = res.output ?? res.text ?? res.response ?? res.parsedOutput ?? res;\nlet value = null;\nlet parseFailed = false;\nif (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) value = raw;\nelse {\n  try { value = JSON.parse(String(raw).trim().replace(/^\\`\\`\\`json\\s*|\\s*\\`\\`\\`$/g, '')); }\n  catch (e) { parseFailed = true; }\n}\nconst routes = ['guided_flow','faq','human_handoff','clarification'];\nconst minConfidence = Number($env.CLASSIFIER_MIN_CONFIDENCE || 0.65);\nlet route = 'human_handoff';\nlet classifier = null;\nlet classifierFailed = parseFailed || upstream.contextFailed === true;\nif (!classifierFailed && value && typeof value === 'object') {\n  const r = String(value.route || '').toLowerCase();\n  const confidence = typeof value.confidence === 'number' ? value.confidence : 0;\n  const risky = [...(Array.isArray(value.risk_flags) ? value.risk_flags : []), ...(upstream.guardrailRiskFlags || [])];\n  const handoffFlags = ['human_requested','credential_shared','billing_dispute','legal','security','data_deletion','tool_failed'];\n  if (routes.includes(r) && confidence >= minConfidence && value.requires_human !== true && !risky.some((f) => handoffFlags.includes(f))) {\n    route = r;\n    classifier = { route: r, intent: String(value.intent || r), case_type: String(value.case_type || 'general'), confidence, risk_flags: risky, flow_id: String(value.flow_id || $env.DEFAULT_GUIDED_FLOW_ID || 'support_main'), labels: Array.isArray(value.labels) ? value.labels : [], summary: String(value.summary || ''), requires_human: false };\n  } else classifierFailed = true;\n}\nreturn [{ json: { ...upstream, route, classifier, classifierFailed, action: route === 'human_handoff' || classifierFailed ? 'handoff' : 'route' } }];"
+      },
+      "id": "pg-validate-classifier",
+      "name": "Validate Classifier Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-classifier-if-cond",
+              "leftValue": "={{ $json.classifierFailed }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-classifier-if",
+      "name": "Classifier OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1780,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "route-guided_flow",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "guided_flow",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "guided_flow"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "route-faq",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "faq",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "faq"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "route-clarification",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "clarification",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "clarification"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "pg-route-switch",
+      "name": "Route Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst flow = $('Fetch Guided Flow').first().json.guidedFlow;\nconst flowId = item.classifier?.flow_id || $('Fetch Guided Flow').first().json.flowId || ($env.DEFAULT_GUIDED_FLOW_ID || 'support_main');\n\nfunction slug(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');}\nfunction submittedEntries(item){if(Array.isArray(item.submittedValues))return item.submittedValues;const p=item.rawPayload||{};const a=p.message?.content_attributes||p.content_attributes||{};const s=a.submitted_values||a.submittedValues||[];if(Array.isArray(s))return s;if(s&&typeof s==='object')return Object.entries(s).map(([n,v])=>({name:n,value:v}));return s?[{value:s}]:[];}\nfunction firstSubmittedValue(e){const f=e[0];if(!f)return'';if(typeof f==='object')return f.value||f.payload||f.name||f.title||'';return f;}\nfunction collectFormData(e){const d={};e.forEach((x,i)=>{if(!x||typeof x!=='object')return;const k=x.name||x.id||x.key||'field_'+(i+1);d[k]=x.value??x.answer??x.text??'';});return d;}\nfunction menuBody(c,o){return{content:c,message_type:'outgoing',private:false,content_type:'input_select',content_attributes:{items:(o||[]).map(x=>({title:x.text,value:x.id}))}};}\nfunction formBody(n){const m={textarea:'text_area',text_area:'text_area',email:'email',select:'select',text:'text'};return{content:n.prompt||'Please provide details.',message_type:'outgoing',private:false,content_type:'form',content_attributes:{items:(n.fields||[]).map(f=>({name:f.id,label:f.label||f.id,type:m[f.type]||'text',placeholder:f.placeholder||'',required:f.required===true}))}};}\nfunction textBody(c){return{content:c,message_type:'outgoing',private:false};}\nfunction validateFlow(f){return f&&f.entry&&f.nodes&&f.nodes[f.entry];}\nfunction findOption(n,raw,text){const o=Array.isArray(n?.options)?n.options:[];const d=String(raw||'').trim();const s=slug(d||text);return o.find(x=>x.id===d||slug(x.id)===s||slug(x.text)===s);}\nfunction emptyFlowState(f){return{flow_version:f.version||1,current_node:f.entry,path:[],form_data:{},llm_turns:0,selected_option:null,mode:null,step:null,resolved:false};}\nfunction runGuidedFlow({flow,item,dbState,startNew,flowId}){const now=new Date().toISOString();const stored=dbState?.flow_state&&typeof dbState.flow_state==='object'?dbState.flow_state:{};const baseState=startNew?emptyFlowState(flow):{flow_version:stored.flow_version||flow.version||1,current_node:stored.current_node||dbState?.current_node||flow.entry,path:Array.isArray(stored.path)?stored.path:[],form_data:stored.form_data&&typeof stored.form_data==='object'?stored.form_data:{},llm_turns:Number(stored.llm_turns||0),selected_option:stored.selected_option||null,mode:stored.mode||dbState?.current_step||null,step:stored.step||null,resolved:stored.resolved===true};\nfunction handoff(reason,nodeId,extra={}){const state={...baseState,current_node:nodeId||baseState.current_node||flow.entry,mode:'handoff',step:reason,last_action:reason,resolved:false,updated_at:now,...extra.state};return{guidedAction:'handoff',action:'handoff',route:'human_handoff',nextFlowState:state,guidedMessageBody:null,activeFlowId:flowId,flowVersion:flow.version||1,currentNode:state.current_node,currentStep:state.step,botStatus:'handoff',flowStatus:'handoff',caseType:extra.caseType||'guided_flow',intent:reason,labelSuggestions:Array.from(new Set([...(item.guardrailLabels||[]),'guided_flow',...(extra.labels||[])])),privateSummary:extra.summary||('Guided handoff '+reason),pendingSubmission:extra.pendingSubmission||null};}\nfunction renderNode(nodeId,patch={}){const node=flow.nodes[nodeId];if(!node)return handoff('guided_flow_missing_node',nodeId);const common={...baseState,current_node:nodeId,mode:node.type,step:node.type,last_action:'show_'+node.type,resolved:false,updated_at:now,...patch};\nif(node.type==='options')return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:common,guidedMessageBody:menuBody(node.prompt||'Choose an option.',node.options||[]),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'options',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided options '+nodeId,pendingSubmission:null};\nif(node.type==='form')return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:common,guidedMessageBody:formBody(node),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'form',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided form '+nodeId,pendingSubmission:null};\nif(node.type==='text'){if(node.next&&flow.nodes[node.next]?.type==='options'){const nx=flow.nodes[node.next];const st={...common,current_node:node.next,mode:'options',step:'options',last_action:'show_text_with_options'};return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:st,guidedMessageBody:menuBody([node.content||'',nx.prompt||'Choose an option.'].filter(Boolean).join('\\\\n\\\\n'),nx.options||[]),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:node.next,currentStep:'options',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided text/options',pendingSubmission:null};}\nconst resolved=nodeId==='resolved';return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:{...common,resolved},guidedMessageBody:textBody(node.content||'Done.'),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'text',botStatus:resolved?'idle':'active',flowStatus:resolved?'completed':'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided text '+nodeId,pendingSubmission:null};}\nif(node.type==='llm'){const st={...common,mode:'llm',step:'awaiting_custom',selected_option:patch.selected_option||baseState.selected_option||'custom'};const cid=baseState.current_node||flow.entry;const ent=submittedEntries(item);const sub=firstSubmittedValue(ent);const entering=startNew||cid!==nodeId||sub||patch.last_action==='option_selected';if(entering)return{guidedAction:'guided_reply',action:'guided_reply',route:'guided_flow',nextFlowState:st,guidedMessageBody:textBody(node.prompt||'Describe your issue.'),activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'awaiting_custom',botStatus:'active',flowStatus:'active',caseType:'guided_flow',intent:'guided_flow',labelSuggestions:['guided_flow'],privateSummary:'Guided llm prompt',pendingSubmission:null};return{guidedAction:'llm',action:'faq',route:'faq',nextFlowState:{...st,step:'llm_support'},guidedMessageBody:null,activeFlowId:flowId,flowVersion:flow.version||1,currentNode:nodeId,currentStep:'llm_support',botStatus:'active',flowStatus:'active',caseType:'faq',intent:'faq',labelSuggestions:['guided_flow'],privateSummary:'Guided custom to FAQ',pendingSubmission:null};}\nif(node.type==='human')return handoff('human_requested',nodeId,{labels:['human_requested']});return handoff('guided_flow_unknown_type',nodeId);}\nif(!validateFlow(flow))return handoff('guided_flow_invalid_config',flow.entry||'unknown');\nif((item.guardrailRiskFlags||[]).includes('human_requested'))return renderNode('human');\nconst entries=submittedEntries(item);const submitted=firstSubmittedValue(entries);const formData=collectFormData(entries);const currentNodeId=baseState.current_node||flow.entry;const currentNode=flow.nodes[currentNodeId]||flow.nodes[flow.entry];const text=String(item.userText||'').trim();const greetingOnly=/^(hi|hello|hey|start|help|menu)$/i.test(text)||!text;\nif(item.interactiveContentType==='form'&&currentNode?.type==='form'&&Object.keys(formData).length){const nextFormData={...baseState.form_data,[currentNodeId]:formData};const target=currentNode.submitTarget||currentNode.next||'human';const pendingSubmission={flow_id:flowId,flow_version:flow.version||1,node_id:currentNodeId,submission_key:item.accountId+':'+item.conversationId+':'+item.messageId+':form:'+currentNodeId,fields:formData,raw_submission:entries,source_message_id:String(item.messageId)};return renderNode(target,{form_data:nextFormData,path:[...baseState.path,currentNodeId+':submitted'],last_action:'form_submitted',pendingSubmission});}\nif(currentNode?.type==='options'){const option=findOption(currentNode,submitted,text);if(option)return renderNode(option.target,{selected_option:option.id,path:[...baseState.path,option.id],last_action:'option_selected'});}\nif(startNew||!dbState?.active_flow_id||baseState.resolved||greetingOnly)return renderNode(flow.entry,{path:[],form_data:{},selected_option:null,llm_turns:0});\nif(currentNode?.type==='llm'&&text&&!submitted)return renderNode(currentNodeId);\nreturn renderNode(flow.entry,{path:[],selected_option:null});}\nconst result = runGuidedFlow({ flow, item, dbState: item.dbState, startNew: true, flowId });\nreturn [{ json: { ...item, ...result } }];"
+      },
+      "id": "pg-start-flow",
+      "name": "Start Guided Flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  ...$json,\n  route: 'clarification',\n  action: 'guided_reply',\n  guidedAction: 'guided_reply',\n  guidedMessageBody: {\n    content: 'What do you need help with?',\n    message_type: 'outgoing',\n    private: false,\n    content_type: 'input_select',\n    content_attributes: { items: [\n      { title: 'Account or gameplay issue', value: 'guided_flow' },\n      { title: 'Billing or rewards', value: 'guided_flow' },\n      { title: 'General FAQ', value: 'faq' },\n      { title: 'Talk to a human', value: 'human_handoff' }\n    ]}\n  },\n  botStatus: 'clarification',\n  flowStatus: 'clarification',\n  caseType: 'clarification',\n  intent: 'clarification',\n  clarificationPending: true,\n  nextFlowState: { clarification_pending: true, updated_at: new Date().toISOString() },\n  privateSummary: 'Asked user to choose support category',\n  labelSuggestions: ['bot_clarification']\n}}];"
+      },
+      "id": "pg-clarification",
+      "name": "Clarification Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ json: {\n  ...item,\n  route: 'human_handoff',\n  action: 'handoff',\n  guidedAction: 'handoff',\n  guidedMessageBody: null,\n  botStatus: 'handoff',\n  flowStatus: 'handoff',\n  caseType: item.caseType || item.classifier?.case_type || 'escalation',\n  intent: item.intent || item.classifier?.intent || 'human_handoff',\n  privateSummary: item.privateSummary || item.classifier?.summary || ('Human handoff for: ' + (item.userText || '')),\n  labelSuggestions: Array.from(new Set(['bot_escalated','n8n_bot',...(item.labelSuggestions||[]),...(item.classifier?.labels||[]),...(item.guardrailLabels||[])]))\n}}];"
+      },
+      "id": "pg-human",
+      "name": "Human Handoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-guided-continue-if-cond",
+              "leftValue": "={{ $json.hasActiveFlow }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-guided-continue-if",
+      "name": "Continue active flow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-guided-llm-if-cond",
+              "leftValue": "={{ $json.guidedAction }}",
+              "rightValue": "llm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-guided-llm-if",
+      "name": "Guided action is LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-guided-handoff-if-cond",
+              "leftValue": "={{ $json.guidedAction }}",
+              "rightValue": "handoff",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-guided-handoff-if",
+      "name": "Guided action is handoff?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1780,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "={{ $env.PINECONE_INDEX || 'pro-golf-support' }}",
+          "mode": "id"
+        },
+        "prompt": "={{ $json.ragQuery || $json.userText }}",
+        "topK": "={{ Number($env.RAG_TOP_K || 5) }}",
+        "options": {
+          "pineconeNamespace": "={{ $env.PINECONE_NAMESPACE || '' }}"
+        }
+      },
+      "id": "pg-pinecone",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2220,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small' }}",
+        "options": {}
+      },
+      "id": "pg-embed",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2220,
+        860
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "__REPLACE_ME__",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let upstream = {};\ntry { upstream = $('Guided action is LLM?').first().json; } catch (e) {}\nif (!upstream.userText) {\n  try { upstream = $('Route Intent').first().json; } catch (e) {}\n}\nif (!upstream.userText) upstream = $input.first().json || {};\nconst minScore = Number($env.RAG_MIN_SCORE || 0.72);\nconst chunks = [];\nfor (const item of $input.all()) {\n  const json = item.json || {};\n  const doc = json.document || json;\n  const meta = doc.metadata || json.metadata || {};\n  const score = typeof json.score === 'number' ? json.score : (typeof meta.score === 'number' ? meta.score : 0);\n  const id = meta.doc_id || meta.id || doc.id || json.id || ('chunk-' + (chunks.length + 1));\n  chunks.push({ id: String(id), score, title: meta.title || doc.title || meta.topic || id, body: typeof doc.pageContent === 'string' ? doc.pageContent : (typeof meta.body === 'string' ? meta.body : '') });\n}\nchunks.sort((a,b)=>b.score-a.score);\nconst maxScore = chunks.reduce((m,c)=>Math.max(m, typeof c.score==='number'?c.score:0),0);\nconst retrieval = { inScope: chunks.length>0 && maxScore>=minScore, maxScore, minScore, chunkCount: chunks.length };\nreturn [{ json: { ...upstream, ragChunks: chunks, retrieval, ragQuery: upstream.ragQuery || upstream.userText } }];"
+      },
+      "id": "pg-rag-context",
+      "name": "Build RAG Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Answer ONLY from knowledge. If unsure, reply NEEDS_HUMAN.\\nMessage: ' + $json.userText + '\\nKnowledge: ' + JSON.stringify($json.ragChunks || []) }}",
+        "options": {
+          "systemMessage": "You are a grounded FAQ assistant. Use only provided knowledge chunks."
+        }
+      },
+      "id": "pg-faq-agent",
+      "name": "RAG FAQ Answer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2660,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "pg-faq-model",
+      "name": "OpenAI FAQ Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2660,
+        860
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "__REPLACE_ME__",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst answer = String(item.output || item.text || item.response || '').trim();\nconst risky = (item.guardrailRiskFlags || []).some((f) => ['human_requested','credential_shared','billing_dispute','legal','security','data_deletion','tool_failed'].includes(f));\nconst needsHuman = risky || !item.retrieval?.inScope || !answer || answer.length > 900 || /NEEDS_HUMAN/i.test(answer);\nif (needsHuman) {\n  return [{ json: { ...item, route: 'human_handoff', action: 'handoff', guidedAction: 'handoff', guidedMessageBody: null, publicAnswer: '', privateSummary: 'FAQ/RAG low confidence or unsafe | maxScore=' + (item.retrieval?.maxScore || 0), labelSuggestions: ['bot_escalated','faq_low_confidence'] } }];\n}\nreturn [{ json: { ...item, route: 'faq', action: 'reply', guidedAction: 'reply', guidedMessageBody: { content: answer, message_type: 'outgoing', private: false }, publicAnswer: answer, botStatus: 'active', flowStatus: 'idle', caseType: 'faq', intent: 'faq', privateSummary: 'FAQ answer from RAG', labelSuggestions: ['faq_answer'] } }];"
+      },
+      "id": "pg-faq-eval",
+      "name": "Evaluate FAQ Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-faq-if-cond",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "handoff",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-faq-if",
+      "name": "FAQ OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3100,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst attrs = {\n  active_flow: item.activeFlowId || item.dbState?.active_flow_id || null,\n  last_intent: item.intent || item.route || null,\n  case_type: item.caseType || null,\n  bot_status: item.botStatus || 'idle',\n  current_step: item.currentStep || item.currentNode || null,\n  agent_summary: String(item.privateSummary || '').slice(0, 240)\n};\nconst flowState = item.nextFlowState || item.dbState?.flow_state || {};\nreturn [{ json: { ...item, lightweightAttributes: attrs, persistFlowState: flowState, auditEventType: item.auditEventType || 'route_decision', auditContext: { route: item.route, action: item.action, intent: item.intent, confidence: item.classifier?.confidence ?? item.confidence ?? null, risk_flags: item.classifier?.risk_flags || item.guardrailRiskFlags || [] } } }];"
+      },
+      "id": "pg-merge-outcome",
+      "name": "Merge Bot Outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_conversation_state (account_id, conversation_id, contact_id, bot_status, active_flow_id, active_flow_version, current_node, current_step, flow_status, flow_state, last_intent, case_type, agent_summary, last_message_id, last_seen_at, failed_turn_count, clarification_pending, updated_at) VALUES ({{ $json.accountId }}, {{ $json.conversationId }}, {{ $json.contactId || 0 }}, {{ $json.botStatus || 'idle' }}, {{ $json.activeFlowId || null }}, {{ $json.flowVersion || null }}, {{ $json.currentNode || null }}, {{ $json.currentStep || null }}, {{ $json.flowStatus || 'idle' }}, '{{ JSON.stringify($json.persistFlowState || {}) }}'::jsonb, {{ $json.intent || null }}, {{ $json.caseType || null }}, {{ ($json.lightweightAttributes || {}).agent_summary || null }}, {{ $json.messageId }}, NOW(), {{ $json.dbState?.failed_turn_count || 0 }}, {{ $json.clarificationPending === true }}, NOW()) ON CONFLICT (account_id, conversation_id, contact_id) DO UPDATE SET bot_status = EXCLUDED.bot_status, active_flow_id = EXCLUDED.active_flow_id, active_flow_version = EXCLUDED.active_flow_version, current_node = EXCLUDED.current_node, current_step = EXCLUDED.current_step, flow_status = EXCLUDED.flow_status, flow_state = EXCLUDED.flow_state, last_intent = EXCLUDED.last_intent, case_type = EXCLUDED.case_type, agent_summary = EXCLUDED.agent_summary, last_message_id = EXCLUDED.last_message_id, last_seen_at = NOW(), clarification_pending = EXCLUDED.clarification_pending, updated_at = NOW() RETURNING id;",
+        "options": {}
+      },
+      "id": "pg-persist-state",
+      "name": "Persist Bot State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3540,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__REPLACE_ME__",
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.pendingSubmission ? \"INSERT INTO bot_flow_submissions (state_id, account_id, conversation_id, contact_id, flow_id, flow_version, node_id, submission_key, fields, raw_submission, source_message_id) VALUES ((SELECT id FROM bot_conversation_state WHERE account_id = \" + $json.accountId + \" AND conversation_id = \" + $json.conversationId + \" AND contact_id = \" + ($json.contactId || 0) + \" LIMIT 1), \" + $json.accountId + \", \" + $json.conversationId + \", \" + ($json.contactId || 0) + \", '\" + $json.pendingSubmission.flow_id + \"', \" + ($json.pendingSubmission.flow_version || 1) + \", '\" + $json.pendingSubmission.node_id + \"', '\" + $json.pendingSubmission.submission_key + \"', '\" + JSON.stringify($json.pendingSubmission.fields).replace(/'/g, \"''\") + \"'::jsonb, '\" + JSON.stringify($json.pendingSubmission.raw_submission).replace(/'/g, \"''\") + \"'::jsonb, '\" + $json.pendingSubmission.source_message_id + \"') ON CONFLICT (submission_key) DO NOTHING\" : \"SELECT 1 WHERE false\" }}",
+        "options": {}
+      },
+      "id": "pg-persist-sub",
+      "name": "Persist Flow Submission",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3760,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__REPLACE_ME__",
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, route, intent, case_type, confidence, risk_flags, context) VALUES ({{ $('Merge Bot Outcome').first().json.accountId }}, {{ $('Merge Bot Outcome').first().json.conversationId }}, {{ $('Merge Bot Outcome').first().json.contactId || 0 }}, {{ $('Merge Bot Outcome').first().json.messageId }}, {{ $('Merge Bot Outcome').first().json.auditEventType || 'route_decision' }}, {{ 'audit:' + $('Merge Bot Outcome').first().json.dedupeKey }}, {{ $('Merge Bot Outcome').first().json.route || null }}, {{ $('Merge Bot Outcome').first().json.intent || null }}, {{ $('Merge Bot Outcome').first().json.caseType || null }}, {{ $('Merge Bot Outcome').first().json.classifier?.confidence ?? null }}, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext?.risk_flags || []) }}'::jsonb, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext || {}) }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
+        "options": {}
+      },
+      "id": "pg-persist-audit",
+      "name": "Persist Audit Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3980,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__REPLACE_ME__",
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/custom_attributes' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ custom_attributes: Object.assign({}, $('Merge Bot Outcome').first().json.customAttributes || {}, $('Merge Bot Outcome').first().json.lightweightAttributes || {}) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-update-attrs",
+      "name": "Update Chatwoot Custom Attributes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4200,
+        320
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pg-action-if-cond",
+              "leftValue": "={{ $('Merge Bot Outcome').first().json.action }}",
+              "rightValue": "handoff",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "pg-action-if",
+      "name": "Needs public reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4420,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Merge Bot Outcome').first().json.guidedMessageBody || { content: $('Merge Bot Outcome').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-send-reply",
+      "name": "Send Chatwoot Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4640,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/labels' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ labels: Array.from(new Set(['n8n_bot'].concat($('Merge Bot Outcome').first().json.labelSuggestions || []))) }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-labels",
+      "name": "Add Labels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4640,
+        440
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/messages' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: '[n8n postgres bot] ' + ($('Merge Bot Outcome').first().json.privateSummary || ''), message_type: 'outgoing', private: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-private-note",
+      "name": "Private Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4860,
+        440
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({}, { status: 'open' }, $env.CHATWOOT_ESCALATION_TEAM_ID ? { team_id: Number($env.CHATWOOT_ESCALATION_TEAM_ID) } : {}, $env.CHATWOOT_ESCALATION_ASSIGNEE_ID ? { assignee_id: Number($env.CHATWOOT_ESCALATION_ASSIGNEE_ID) } : {})) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "pg-assign",
+      "name": "Assign Team",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5080,
+        440
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, route: $('Merge Bot Outcome').first().json.route, action: $('Merge Bot Outcome').first().json.action }) }}"
+      },
+      "id": "pg-resp-ok",
+      "name": "Respond OK (handled)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4860,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, route: $('Merge Bot Outcome').first().json.route, action: $('Merge Bot Outcome').first().json.action }) }}"
+      },
+      "id": "pg-resp-handoff",
+      "name": "Respond OK (handoff)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5300,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook AgentBot": {
+      "main": [
+        [
+          {
+            "node": "Normalize Chatwoot Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Chatwoot Payload": {
+      "main": [
+        [
+          {
+            "node": "Continue?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue?": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Get Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Get Conversation": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot List Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot List Messages": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot Get Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Get Contact": {
+      "main": [
+        [
+          {
+            "node": "Build Chatwoot Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Chatwoot Context": {
+      "main": [
+        [
+          {
+            "node": "Guardrail Precheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail Precheck": {
+      "main": [
+        [
+          {
+            "node": "Load Bot State from Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Bot State from Postgres": {
+      "main": [
+        [
+          {
+            "node": "Merge Bot State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Bot State": {
+      "main": [
+        [
+          {
+            "node": "Idempotency / Debounce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency / Debounce": {
+      "main": [
+        [
+          {
+            "node": "Apply Idempotency Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Idempotency Result": {
+      "main": [
+        [
+          {
+            "node": "Not duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Postgres OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK (dup)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres OK?": {
+      "main": [
+        [
+          {
+            "node": "Router: Active Flow?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router: Active Flow?": {
+      "main": [
+        [
+          {
+            "node": "Has active flow?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has active flow?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Guided Flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Classifier Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Guided Flow": {
+      "main": [
+        [
+          {
+            "node": "Continue active flow?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue active flow?": {
+      "main": [
+        [
+          {
+            "node": "Continue Guided Flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start Guided Flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Guided Flow": {
+      "main": [
+        [
+          {
+            "node": "Guided action is LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Guided Flow": {
+      "main": [
+        [
+          {
+            "node": "Guided action is LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guided action is LLM?": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guided action is handoff?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guided action is handoff?": {
+      "main": [
+        [
+          {
+            "node": "Human Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Bot Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Classifier Input": {
+      "main": [
+        [
+          {
+            "node": "Classify Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Message": {
+      "main": [
+        [
+          {
+            "node": "Validate Classifier Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Classifier Output": {
+      "main": [
+        [
+          {
+            "node": "Classifier OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier OK?": {
+      "main": [
+        [
+          {
+            "node": "Route Intent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Intent": {
+      "main": [
+        [
+          {
+            "node": "Fetch Guided Flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clarification Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Build RAG Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build RAG Context": {
+      "main": [
+        [
+          {
+            "node": "RAG FAQ Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG FAQ Answer": {
+      "main": [
+        [
+          {
+            "node": "Evaluate FAQ Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate FAQ Answer": {
+      "main": [
+        [
+          {
+            "node": "FAQ OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ OK?": {
+      "main": [
+        [
+          {
+            "node": "Merge Bot Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Human Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clarification Reply": {
+      "main": [
+        [
+          {
+            "node": "Merge Bot Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Handoff": {
+      "main": [
+        [
+          {
+            "node": "Merge Bot Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Bot Outcome": {
+      "main": [
+        [
+          {
+            "node": "Persist Bot State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Bot State": {
+      "main": [
+        [
+          {
+            "node": "Persist Flow Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Flow Submission": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit Event": {
+      "main": [
+        [
+          {
+            "node": "Update Chatwoot Custom Attributes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Chatwoot Custom Attributes": {
+      "main": [
+        [
+          {
+            "node": "Needs public reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs public reply?": {
+      "main": [
+        [
+          {
+            "node": "Send Chatwoot Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Chatwoot Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (handled)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Labels": {
+      "main": [
+        [
+          {
+            "node": "Private Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Private Note": {
+      "main": [
+        [
+          {
+            "node": "Assign Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Team": {
+      "main": [
+        [
+          {
+            "node": "Respond OK (handoff)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Classifier Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Message",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify Message",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI FAQ Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG FAQ Answer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateId": "chatwoot-support-bot-postgres"
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

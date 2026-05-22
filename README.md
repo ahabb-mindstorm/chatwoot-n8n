@@ -24,6 +24,7 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
    ```
 4. Complete n8n onboarding, import a workflow JSON, activate:
    - **Legacy (Chatwoot-stored guided state):** `workflows/chatwoot-support-bot.json` → webhook `chatwoot-support-bot`
+   - **Hybrid guided + RAG:** `workflows/chatwoot-guided-with-rag.json` → webhook `chatwoot-guided-with-rag`
    - **Postgres-backed (recommended):** `workflows/chatwoot-support-bot-postgres.json` → webhook `chatwoot-support-bot-postgres`
 5. In n8n, create a **Postgres** credential named `Bot Postgres` (host `postgres`, db/user/password from `.env`) and attach it to all Postgres nodes (`__REPLACE_ME__` placeholders). Configure OpenAI + Pinecone credentials on AI/RAG nodes.
 6. Point Chatwoot Agent Bot **`outgoing_url`** to `{WEBHOOK_URL}webhook/<workflow-path>` (slash rules: trailing slash matters for `WEBHOOK_URL` env).  
@@ -151,6 +152,14 @@ export CHATWOOT_PLATFORM_ACCESS_TOKEN=platform-token
 bash scripts/setup-agent-bot.sh
 ```
 
+## Hybrid Guided + RAG Bot (Pinecone)
+
+Workflow: `workflows/chatwoot-guided-with-rag.json`.
+
+This combines the static guided menu from `workflows/chatwoot-support-bot.json` with Pinecone-backed RAG. New conversations go straight to the guided menu, including **Ask something else**. After the customer picks that option, later messages stay in LLM/RAG mode while Pinecone retrieval is in scope; low confidence, missing context, unsafe topics, or `needs_human` from the model hand off to a human.
+
+Configure **OpenAI** and **Pinecone** credentials on **Embeddings OpenAI**, **Pinecone Vector Store**, and **OpenAI RAG Model** nodes. Point Chatwoot Agent Bot `outgoing_url` to `{WEBHOOK_URL}webhook/chatwoot-guided-with-rag`.
+
 ## RAG guided bot (Pinecone)
 
 Separate workflow: `workflows/chatwoot-rag-guided-bot.json`.
@@ -216,6 +225,8 @@ Manual matrix: [`TESTING.md`](TESTING.md).
 
 ## Troubleshooting
 
+- **`access to env vars denied` / `Cannot assign to read only property 'name'`** — Recent n8n blocks `$env` in Code nodes unless you set `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` on the n8n container (included in this repo’s `docker-compose.yml`). After adding it, run `docker compose down && docker compose up -d`. Ensure Chatwoot/OpenAI vars are in `.env` so they are passed into the container.
+- **`Postgres idempotency failed; fail-closed handoff`** — The workflow intentionally escalates when Postgres errors. Common causes: migration not applied (`migrations/001_bot_support_state.sql`), n8n **Bot Postgres** credential missing/wrong (host must be `postgres`, not `localhost`, when n8n runs in Compose), or SQL error on the idempotency insert. In n8n, open execution data for **Load Bot State from Postgres** and **Idempotency / Debounce** and read the `error` field. `dbState: null` alone is normal for a new conversation; `postgresFailed: true` is not.
 - Labels API 422 → titles must exist beforehand.  
 - Empty transcript → LIST messages query returns different envelope; tweak parsing in Build Prompt Code.  
 - OpenAI refuses JSON → Temperature already low; widen system prompt minimally.  

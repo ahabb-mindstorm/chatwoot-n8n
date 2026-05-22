@@ -77,16 +77,23 @@ if (!accountId || !conversationId || !messageId) return [{ json: { skip: true, r
 return [{ json: { skip: false, accountId, conversationId, messageId, userText, inboxId: conversation.inbox_id || inbox.id, contactId, senderType, isInteractiveSubmission: Boolean(hasInteractiveSubmission), interactiveContentType: hasInteractiveSubmission ? contentType : null, submittedValues: entries, rawPayload: payload, dedupeKey: \`msg:\${accountId}:\${conversationId}:\${messageId}\` } }];`;
 
 const mergeBotStateCode = `const base = $('Normalize Chatwoot Payload').first().json;
+const pgOut = $input.first().json || {};
 const rows = $input.all().map((item) => item.json).filter((row) => row && row.id);
 const dbState = rows[0] || null;
-const postgresFailed = Boolean($input.first().json?.error);
-return [{ json: { ...base, dbState, postgresFailed, stateId: dbState?.id || null } }];`;
+const pgError = pgOut.error || pgOut.message || pgOut.detail || null;
+const postgresFailed = Boolean(pgError);
+return [{ json: { ...base, dbState, postgresFailed, postgresError: pgError ? String(pgError) : null, stateId: dbState?.id || null } }];`;
 
 const idempotencyCode = `const base = $('Merge Bot State').first().json;
+const pgOut = $input.first().json || {};
 const insertRows = $input.all().map((item) => item.json).filter((row) => row && row.id);
 const inserted = insertRows.length > 0;
-const postgresFailed = Boolean(base.postgresFailed || $input.first().json?.error);
-if (postgresFailed) return [{ json: { ...base, route: 'human_handoff', action: 'handoff', postgresFailed: true, skip: false, duplicateMessage: false, privateSummary: 'Postgres idempotency failed; fail-closed handoff' } }];
+const pgError = pgOut.error || pgOut.message || pgOut.detail || null;
+const postgresFailed = Boolean(base.postgresFailed || pgError);
+if (postgresFailed) {
+  const errText = String(pgError || base.postgresError || 'unknown');
+  return [{ json: { ...base, route: 'human_handoff', action: 'handoff', postgresFailed: true, postgresError: errText, skip: false, duplicateMessage: false, privateSummary: 'Postgres failed; fail-closed handoff | ' + errText } }];
+}
 if (!inserted) return [{ json: { ...base, skip: true, reason: 'duplicate_message', duplicateMessage: true } }];
 const debounceMs = Number($env.CONVERSATION_DEBOUNCE_MS || 2000);
 const lastSeen = base.dbState?.last_seen_at ? Date.parse(base.dbState.last_seen_at) : 0;
@@ -387,7 +394,7 @@ const nodes = [
   node("pg-merge-state", "Merge Bot State", "n8n-nodes-base.code", [-420, 120], { jsCode: mergeBotStateCode }, { typeVersion: 2 }),
   node("pg-idem-insert", "Idempotency / Debounce", "n8n-nodes-base.postgres", [-200, 120], {
     operation: "executeQuery",
-    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, context) VALUES ({{ $('Merge Bot State').first().json.accountId }}, {{ $('Merge Bot State').first().json.conversationId }}, {{ $('Merge Bot State').first().json.contactId || 0 }}, {{ $('Merge Bot State').first().json.messageId }}, 'message_received', {{ $('Merge Bot State').first().json.dedupeKey }}, '{{ JSON.stringify({ userText: $('Merge Bot State').first().json.userText }) }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
+    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, context) VALUES ({{ $('Merge Bot State').first().json.accountId }}, {{ $('Merge Bot State').first().json.conversationId }}, {{ $('Merge Bot State').first().json.contactId || 0 }}, '{{ String($('Merge Bot State').first().json.messageId).replace(/'/g, \"''\") }}', 'message_received', '{{ String($('Merge Bot State').first().json.dedupeKey).replace(/'/g, \"''\") }}', '{{ JSON.stringify({ userText: $('Merge Bot State').first().json.userText }).replace(/'/g, \"''\") }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
     options: {},
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
   node("pg-idem-code", "Apply Idempotency Result", "n8n-nodes-base.code", [20, 120], { jsCode: idempotencyCode }, { typeVersion: 2 }),
@@ -467,7 +474,7 @@ const nodes = [
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
   node("pg-persist-audit", "Persist Audit Event", "n8n-nodes-base.postgres", [3980, 320], {
     operation: "executeQuery",
-    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, route, intent, case_type, confidence, risk_flags, context) VALUES ({{ $('Merge Bot Outcome').first().json.accountId }}, {{ $('Merge Bot Outcome').first().json.conversationId }}, {{ $('Merge Bot Outcome').first().json.contactId || 0 }}, {{ $('Merge Bot Outcome').first().json.messageId }}, {{ $('Merge Bot Outcome').first().json.auditEventType || 'route_decision' }}, {{ 'audit:' + $('Merge Bot Outcome').first().json.dedupeKey }}, {{ $('Merge Bot Outcome').first().json.route || null }}, {{ $('Merge Bot Outcome').first().json.intent || null }}, {{ $('Merge Bot Outcome').first().json.caseType || null }}, {{ $('Merge Bot Outcome').first().json.classifier?.confidence ?? null }}, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext?.risk_flags || []) }}'::jsonb, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext || {}) }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
+    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, route, intent, case_type, confidence, risk_flags, context) VALUES ({{ $('Merge Bot Outcome').first().json.accountId }}, {{ $('Merge Bot Outcome').first().json.conversationId }}, {{ $('Merge Bot Outcome').first().json.contactId || 0 }}, '{{ String($('Merge Bot Outcome').first().json.messageId).replace(/'/g, \"''\") }}', '{{ String($('Merge Bot Outcome').first().json.auditEventType || 'route_decision').replace(/'/g, \"''\") }}', '{{ ('audit:' + $('Merge Bot Outcome').first().json.dedupeKey).replace(/'/g, \"''\") }}', {{ $json.route ? \"'\" + String($('Merge Bot Outcome').first().json.route).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.intent ? \"'\" + String($('Merge Bot Outcome').first().json.intent).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.caseType ? \"'\" + String($('Merge Bot Outcome').first().json.caseType).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $('Merge Bot Outcome').first().json.classifier?.confidence ?? 'NULL' }}, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext?.risk_flags || []).replace(/'/g, \"''\") }}'::jsonb, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext || {}).replace(/'/g, \"''\") }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
     options: {},
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
   node("pg-update-attrs", "Update Chatwoot Custom Attributes", "n8n-nodes-base.httpRequest", [4200, 320], {

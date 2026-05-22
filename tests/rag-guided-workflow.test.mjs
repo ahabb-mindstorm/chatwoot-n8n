@@ -25,12 +25,36 @@ function loadRagWorkflow() {
   return JSON.parse(raw);
 }
 
+function loadHybridWorkflow() {
+  const raw = readFileSync(
+    join(rootDir, "workflows/chatwoot-guided-with-rag.json"),
+    "utf8",
+  );
+  return JSON.parse(raw);
+}
+
 test("rag workflow JSON parses", () => {
   loadRagWorkflow();
 });
 
+test("hybrid guided RAG workflow JSON parses", () => {
+  loadHybridWorkflow();
+});
+
 test("rag workflow Code node JavaScript compiles", () => {
   const workflow = loadRagWorkflow();
+  for (const node of workflow.nodes) {
+    const code = node.parameters?.jsCode;
+    if (!code) continue;
+    assert.doesNotThrow(
+      () => new vm.Script(`(async () => {\n${code}\n})()`),
+      `${node.name} should compile`,
+    );
+  }
+});
+
+test("hybrid guided RAG workflow Code node JavaScript compiles", () => {
+  const workflow = loadHybridWorkflow();
   for (const node of workflow.nodes) {
     const code = node.parameters?.jsCode;
     if (!code) continue;
@@ -83,6 +107,50 @@ test("rag workflow contains RAG and Flow Planner nodes", () => {
   assert.ok(names.has("Merge Guided State"));
   assert.ok(types.has("@n8n/n8n-nodes-langchain.vectorStorePinecone"));
   assert.equal(workflow.nodes.find((n) => n.type === "n8n-nodes-base.webhook").parameters.path, "chatwoot-rag-guided-bot");
+});
+
+test("hybrid workflow starts with guided flow and routes custom questions to RAG", () => {
+  const workflow = loadHybridWorkflow();
+  const connections = workflow.connections;
+  const names = new Set(workflow.nodes.map((node) => node.name));
+
+  assert.equal(
+    connections["Guardrail Precheck"].main[0][0].node,
+    "Fetch Guided Flow",
+  );
+  assert.equal(
+    connections["Fetch Guided Flow"].main[0][0].node,
+    "Guided Flow Router",
+  );
+  assert.equal(
+    connections["Guided action is LLM?"].main[0][0].node,
+    "Pinecone Vector Store",
+  );
+  assert.equal(
+    connections["Pinecone Vector Store"].main[0][0].node,
+    "Build RAG Context",
+  );
+  assert.equal(
+    connections["Build RAG Context"].main[0][0].node,
+    "RAG Guided Agent",
+  );
+  assert.equal(
+    connections["Evaluate RAG Answer"].main[0][0].node,
+    "Failed Turn Tracker",
+  );
+  assert.ok(names.has("Embeddings OpenAI"));
+  assert.ok(names.has("OpenAI RAG Model"));
+  assert.equal(
+    workflow.nodes.find((n) => n.type === "n8n-nodes-base.webhook").parameters.path,
+    "chatwoot-guided-with-rag",
+  );
+});
+
+test("hybrid workflow exposes ask something else guided option", () => {
+  const workflow = loadHybridWorkflow();
+  const fetchFlow = workflow.nodes.find((node) => node.name === "Fetch Guided Flow");
+  assert.match(fetchFlow.parameters.jsCode, /Ask something else/);
+  assert.doesNotMatch(fetchFlow.parameters.jsCode, /Ask a custom question/);
 });
 
 test("evaluateRetrieval marks in-scope when max score meets threshold", () => {

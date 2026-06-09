@@ -4,6 +4,7 @@
   "scripts": {
     "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs",
     "workflow:generate-postgres": "node scripts/generate-postgres-workflow.mjs",
+    "test:webhook-scenario": "node scripts/run-webhook-scenarios.mjs",
     "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs",
     "rag:export-helpshift": "node scripts/export-helpshift-rag-md.mjs",
     "rag:upsert-helpshift": "node --env-file=.env scripts/upsert-helpshift-rag.mjs",

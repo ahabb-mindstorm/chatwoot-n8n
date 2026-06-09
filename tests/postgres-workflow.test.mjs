@@ -6,7 +6,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 import { validateClassifier, parseClassifierOutput, CLASSIFIER_JSON_SCHEMA } from "../lib/classifier.mjs";
-import { runGuidedFlow, isActiveFlow, buildLightweightCustomAttributes } from "../lib/guidedFlowEngine.mjs";
+import { runGuidedFlow, isActiveFlow, buildLightweightCustomAttributes, startNodeForItem } from "../lib/guidedFlowEngine.mjs";
 import { evaluateRetrieval, evaluateFaqAnswer } from "../lib/ragFaq.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -129,6 +129,103 @@ test("guided flow engine starts menu for greeting", () => {
   });
   assert.equal(result.guidedAction, "guided_reply");
   assert.equal(result.currentNode, "main");
+});
+
+test("guided flow engine starts at contextual tournament entry", () => {
+  const flow = {
+    version: 1,
+    entry: "main",
+    entries: { main_menu: "main", tournament: "tournament_entry" },
+    nodes: {
+      main: {
+        type: "options",
+        prompt: "Main help",
+        options: [{ id: "human", text: "Talk to a human", target: "human" }],
+      },
+      tournament_entry: {
+        type: "options",
+        prompt: "Tournament help",
+        options: [{ id: "results", text: "Results issue", target: "human" }],
+      },
+      human: { type: "human" },
+    },
+  };
+  const item = {
+    userText: "hi",
+    guardrailRiskFlags: [],
+    accountId: 1,
+    conversationId: 2,
+    messageId: "3",
+    customAttributes: { support_landing_source: "tournament" },
+  };
+
+  assert.equal(startNodeForItem(flow, item), "tournament_entry");
+  const result = runGuidedFlow({ flow, item, dbState: null, startNew: true });
+
+  assert.equal(result.guidedAction, "guided_reply");
+  assert.equal(result.currentNode, "tournament_entry");
+  assert.equal(result.guidedMessageBody.content, "Tournament help");
+});
+
+test("guided flow upload node waits for and stores attachments", () => {
+  const flow = {
+    version: 1,
+    entry: "upload_receipt",
+    nodes: {
+      upload_receipt: {
+        type: "upload",
+        prompt: "Please upload your purchase receipt.",
+        submitTarget: "done",
+        skipTarget: "human",
+      },
+      done: { type: "text", content: "Receipt received." },
+      human: { type: "human" },
+    },
+  };
+
+  const shown = runGuidedFlow({
+    flow,
+    item: { userText: "", guardrailRiskFlags: [], accountId: 1, conversationId: 2, messageId: "3" },
+    dbState: null,
+    startNew: true,
+  });
+  assert.equal(shown.currentStep, "upload");
+  assert.equal(shown.guidedMessageBody.content, "Please upload your purchase receipt.");
+
+  const uploaded = runGuidedFlow({
+    flow,
+    item: {
+      userText: "",
+      attachments: [{ id: 7, file_type: "image", file_name: "receipt.png", data_url: "https://example.test/r.png" }],
+      guardrailRiskFlags: [],
+      accountId: 1,
+      conversationId: 2,
+      messageId: "4",
+    },
+    dbState: {
+      active_flow_id: "support_main",
+      flow_status: "active",
+      flow_state: shown.nextFlowState,
+    },
+    startNew: false,
+  });
+  assert.equal(uploaded.currentNode, "done");
+  assert.equal(uploaded.pendingSubmission.fields.attachments[0].file_name, "receipt.png");
+  assert.deepEqual(uploaded.nextFlowState.form_data.upload_receipt.attachments[0].id, 7);
+
+  const skipped = runGuidedFlow({
+    flow,
+    item: { userText: "nothing to attach", guardrailRiskFlags: [], accountId: 1, conversationId: 2, messageId: "5" },
+    dbState: {
+      active_flow_id: "support_main",
+      flow_status: "active",
+      flow_state: shown.nextFlowState,
+    },
+    startNew: false,
+  });
+  assert.equal(skipped.guidedAction, "handoff");
+  assert.equal(skipped.nextFlowState.current_node, "human");
+  assert.equal(skipped.pendingSubmission.fields.skipped, true);
 });
 
 test("lightweight custom attributes exclude full flow state", () => {

@@ -16,7 +16,12 @@ function loadWorkflow() {
   return JSON.parse(raw);
 }
 
-async function runCodeNode(workflow, nodeName, item) {
+function loadV3Workflow() {
+  const raw = readFileSync(join(rootDir, "workflows/chatwoot-bot-with-rag-v3.json"), "utf8");
+  return JSON.parse(raw);
+}
+
+async function runCodeNode(workflow, nodeName, item, context = {}) {
   const node = workflow.nodes.find((candidate) => candidate.name === nodeName);
   assert.ok(node, `${nodeName} node exists`);
   const code = node.parameters?.jsCode;
@@ -25,6 +30,8 @@ async function runCodeNode(workflow, nodeName, item) {
   return script.runInNewContext({
     $input: { first: () => ({ json: item }) },
     $json: item,
+    $env: {},
+    ...context,
   });
 }
 
@@ -44,6 +51,52 @@ test("workflow Code node JavaScript compiles", () => {
       `${node.name} should compile`,
     );
   }
+});
+
+test("v3 workflow resets guided state on resolved status changes", async () => {
+  const workflow = loadV3Workflow();
+  const [{ json: normalized }] = await runCodeNode(workflow, "Validate & Normalize", {
+    headers: { "x-chatwoot-delivery": "delivery-333" },
+    body: {
+      event: "conversation_status_changed",
+      status: "resolved",
+      id: 23,
+      custom_attributes: {
+        n8n_guided_flow: {
+          flow_version: 1,
+          current_node: "llm",
+          path: ["withdrawal"],
+          form_data: { old: true },
+          llm_turns: 3,
+        },
+        other_attribute: "keep",
+      },
+      messages: [{ account_id: 2 }],
+    },
+  });
+
+  assert.equal(normalized.resetOnly, true);
+  assert.equal(normalized.accountId, 2);
+  assert.equal(normalized.conversationId, 23);
+  assert.match(normalized.messageId, /^status:23:/);
+  assert.equal(normalized.customAttributes.other_attribute, "keep");
+
+  const staticData = {
+    failedTurns: { 23: 2 },
+    convDebounce: { 23: Date.now() },
+  };
+  const [{ json: reset }] = await runCodeNode(workflow, "Prepare Conversation Reset", normalized, {
+    $getWorkflowStaticData: () => staticData,
+  });
+
+  assert.equal(staticData.failedTurns[23], undefined);
+  assert.equal(staticData.convDebounce[23], undefined);
+  assert.equal(reset.customAttributes.other_attribute, "keep");
+  assert.equal(reset.customAttributes.n8n_guided_flow.mode, "completed");
+  assert.equal(reset.customAttributes.n8n_guided_flow.step, "chatwoot_resolved");
+  assert.equal(reset.customAttributes.n8n_guided_flow.resolved, true);
+  assert.equal(Array.isArray(reset.customAttributes.n8n_guided_flow.path), true);
+  assert.equal(reset.customAttributes.n8n_guided_flow.path.length, 0);
 });
 
 test("workflow contains planned AI Agent and context nodes", () => {
@@ -378,6 +431,35 @@ test("validate accepts Chatwoot form submission on message_updated", () => {
   assert.equal(res.data.interactiveContentType, "form");
   assert.deepEqual(res.data.submittedValues, [{ name: "lost_location", value: "Tournament screen" }]);
   assert.equal(res.data.messageId, '280:form:{"lost_location":"Tournament screen"}:delivery-2');
+});
+
+test("validate preserves Chatwoot message attachments", () => {
+  const res = validateAgentBotEnvelope(
+    {
+      body: {
+        event: "message_created",
+        id: 301,
+        content: "",
+        message_type: "incoming",
+        attachments: [
+          {
+            id: 9,
+            file_type: "image",
+            file_name: "receipt.png",
+            data_url: "https://example.test/receipt.png",
+          },
+        ],
+        sender: { id: 44, type: "contact" },
+        account: { id: 1 },
+        conversation: { id: 2, inbox_id: 3 },
+      },
+      headers: {},
+    },
+    {},
+  );
+  assert.equal(res.ok, true);
+  assert.equal(res.data.hasAttachments, true);
+  assert.equal(res.data.attachments[0].file_name, "receipt.png");
 });
 
 test("validate rejects non-selection message_updated events", () => {

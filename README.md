@@ -45,7 +45,13 @@ Workflow includes an n8n LangChain **AI Agent** node. Configure OpenAI credentia
 
 ### Guided support flow
 
-The workflow uses **Fetch Guided Flow** as a temporary API stand-in. It returns a static JSON tree shaped like the future portal/API response. Replace this Code node with an HTTP Request later, as long as the router still receives `guidedFlow`.
+The V3 workflow uses **Fetch Guided Flow** to load the published flow from the support frontend visual creator when `GUIDED_FLOW_API_URL` is set. It calls:
+
+```text
+${GUIDED_FLOW_API_URL}/api/workflows/current
+```
+
+Publishing a workflow in the visual creator makes it the single live workflow; publishing another workflow moves the previous live workflow back to draft. If the current live workflow is unpublished, `/api/workflows/current` returns no workflow and V3 routes customers to handoff instead of rendering stale embedded menus. If the API URL is not configured or the fetch fails unexpectedly, the node falls back to the embedded V3 JSON tree so support does not go dark.
 
 Flow schema:
 
@@ -77,6 +83,7 @@ Supported node types:
 
 - `options` renders Chatwoot `input_select`.
 - `form` renders Chatwoot `form`.
+- `upload` renders a prompt and waits for the next incoming Chatwoot message with `attachments`; use `submitTarget`/`next` after upload and optional `skipTarget` when user says `skip` or `nothing to attach`.
 - `text` renders a public message, or text plus the next options node when `next` points to `options`.
 - `llm` enters the AI Agent path.
 - `human` enters the handoff path.
@@ -110,7 +117,7 @@ Regenerate workflow after editing `scripts/generate-postgres-workflow.mjs`:
 npm run workflow:generate-postgres
 ```
 
-The router reads `content_attributes.submitted_values` from Chatwoot `input_select` and `form` submissions. It also accepts plain text fallback values that match current option IDs or labels.
+The router reads `content_attributes.submitted_values` from Chatwoot `input_select` and `form` submissions. It also accepts plain text fallback values that match current option IDs or labels, and stores attachment metadata when an active `upload` node receives a Chatwoot message with `attachments`.
 
 ### FAQ source
 

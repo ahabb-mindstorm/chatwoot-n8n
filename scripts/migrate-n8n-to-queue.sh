@@ -12,6 +12,8 @@ fi
 
 N8N_DB_NAME="${N8N_DB_NAME:-n8n}"
 N8N_WORKER_REPLICAS="${N8N_WORKER_REPLICAS:-2}"
+MIGRATE_N8N_INCLUDE_EXECUTIONS="${MIGRATE_N8N_INCLUDE_EXECUTIONS:-false}"
+MIGRATE_N8N_DROP_EXISTING_TARGET_DB="${MIGRATE_N8N_DROP_EXISTING_TARGET_DB:-false}"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -48,7 +50,14 @@ fi
 
 if docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" -Atqc \
   "SELECT 1 FROM pg_database WHERE datname = '$N8N_DB_NAME'" | grep -q 1; then
-  fail "Database '$N8N_DB_NAME' already exists. Refusing to overwrite it."
+  if [[ "$MIGRATE_N8N_DROP_EXISTING_TARGET_DB" == "true" ]]; then
+    echo "Dropping existing target database '$N8N_DB_NAME' because MIGRATE_N8N_DROP_EXISTING_TARGET_DB=true..."
+    docker compose exec -T postgres dropdb --if-exists \
+      -U "${POSTGRES_USER:-chatwoot_bot}" \
+      "$N8N_DB_NAME"
+  else
+    fail "Database '$N8N_DB_NAME' already exists. Refusing to overwrite it. If this is a failed partial migration, rerun once with MIGRATE_N8N_DROP_EXISTING_TARGET_DB=true."
+  fi
 fi
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -58,7 +67,14 @@ chmod 700 "$backup_dir"
 
 legacy_stopped=false
 queue_started=false
+target_db_created=false
 rollback_on_error() {
+  if [[ "$queue_started" == false && "$target_db_created" == true ]]; then
+    echo "Migration failed; dropping the partially imported target database '$N8N_DB_NAME'." >&2
+    docker compose exec -T postgres dropdb --if-exists \
+      -U "${POSTGRES_USER:-chatwoot_bot}" \
+      "$N8N_DB_NAME" || true
+  fi
   if [[ "$queue_started" == false && "$legacy_stopped" == true ]]; then
     echo "Migration failed; restarting the untouched SQLite n8n service." >&2
     docker compose up -d n8n || true
@@ -76,15 +92,22 @@ n8n_container_id="$(docker compose ps -a -q n8n)"
 docker run --rm --volumes-from "$n8n_container_id" -v "$backup_dir:/backup" alpine:3.20 \
   tar -czf /backup/n8n-data.tgz -C /home/node/.n8n .
 
-echo "Exporting all n8n entities, including execution history..."
+export_args=(export:entities --outputDir=/backup/entities)
+if [[ "$MIGRATE_N8N_INCLUDE_EXECUTIONS" == "true" ]]; then
+  export_args+=(--includeExecutionHistoryDataTables=true)
+  echo "Exporting all n8n entities, including execution history..."
+else
+  echo "Exporting n8n entities without historical execution rows..."
+fi
 docker compose run --rm --no-deps -v "$backup_dir:/backup" n8n \
-  export:entities --outputDir=/backup/entities --includeExecutionHistoryDataTables=true
+  "${export_args[@]}"
 
 echo "Creating the dedicated n8n PostgreSQL database..."
 docker compose exec -T postgres createdb \
   -U "${POSTGRES_USER:-chatwoot_bot}" \
   -O "${POSTGRES_USER:-chatwoot_bot}" \
   "$N8N_DB_NAME"
+target_db_created=true
 
 echo "Starting PostgreSQL and Redis for the import..."
 docker compose -f docker-compose.queue.yml up -d postgres redis

@@ -91,6 +91,7 @@ test("postgres workflow contains required nodes and classifier parser wiring", (
     "Clarification Reply",
     "Human Handoff",
     "Merge Bot Outcome",
+    "Merge Support State",
     "Persist Bot State",
     "Persist Flow Submission",
     "Persist Audit Event",
@@ -109,9 +110,98 @@ test("postgres workflow contains required nodes and classifier parser wiring", (
   const updateAttrs = workflow.nodes.find((n) => n.name === "Update Chatwoot Custom Attributes");
   assert.ok(updateAttrs.parameters.jsonBody.includes("lightweightAttributes"));
   assert.ok(!updateAttrs.parameters.jsonBody.includes("n8n_guided_flow"));
+  assert.ok(!updateAttrs.parameters.jsonBody.includes("supportState"));
+
+  const persistState = workflow.nodes.find((n) => n.name === "Persist Bot State");
+  assert.ok(persistState.parameters.query.includes("support_state"));
+  assert.ok(persistState.parameters.query.includes("support_state_version"));
+
+  const classifierInput = workflow.nodes.find((n) => n.name === "Build Classifier Input");
+  assert.ok(classifierInput.parameters.jsCode.includes("Curated support_state"));
+
+  const faqAgent = workflow.nodes.find((n) => n.name === "RAG FAQ Answer");
+  assert.ok(faqAgent.parameters.text.includes("support_state.pending_clarification"));
 
   const webhook = workflow.nodes.find((n) => n.name === "Webhook AgentBot");
   assert.equal(webhook.parameters.path, "chatwoot-support-bot-postgres");
+});
+
+test("support state migration adds curated memory columns", () => {
+  const raw = readFileSync(join(rootDir, "migrations/003_support_state.sql"), "utf8");
+  assert.match(raw, /ADD COLUMN IF NOT EXISTS support_state JSONB NOT NULL DEFAULT '\{\}'::jsonb/);
+  assert.match(raw, /ADD COLUMN IF NOT EXISTS support_state_version INTEGER NOT NULL DEFAULT 1/);
+});
+
+test("support state resolves short yes follow-up against pending clarification", async () => {
+  const workflow = loadWorkflow();
+  const [result] = await runCodeNode(workflow, "Merge Support State", {
+    userText: "yes i have",
+    action: "reply",
+    route: "faq",
+    caseType: "faq",
+    supportState: {
+      version: 1,
+      current_issue: "I can't get any tickets",
+      category: "rewards",
+      reward_source: "tournament",
+      confirmed_facts: {},
+      known_fields: {},
+      pending_clarification: {
+        id: "played_tournaments",
+        question: "Have you been playing any tournaments?",
+        expected_answer_type: "boolean",
+      },
+      asked_checks: [],
+      answered_checks: [],
+      turn_count: 1,
+    },
+    guidedMessageBody: {
+      content: "Thanks. Please check the Prizes tab and confirm whether the tournament has concluded.",
+      message_type: "outgoing",
+      private: false,
+    },
+    statePatch: { last_supported_faq_ids: ["3353"] },
+  });
+
+  assert.equal(result.json.supportState.current_issue, "I can't get any tickets");
+  assert.equal(result.json.supportState.category, "rewards");
+  assert.equal(result.json.supportState.reward_source, "tournament");
+  assert.equal(result.json.supportState.confirmed_facts.played_tournaments, true);
+  assert.equal(result.json.supportState.pending_clarification, null);
+  assert.ok(result.json.supportState.asked_checks.includes("check_prizes_tab"));
+  assert.deepEqual(Array.from(result.json.supportState.last_supported_faq_ids), ["3353"]);
+});
+
+test("support state captures expected reward amount from pending money question", async () => {
+  const workflow = loadWorkflow();
+  const [result] = await runCodeNode(workflow, "Merge Support State", {
+    userText: "$1",
+    action: "reply",
+    route: "faq",
+    supportState: {
+      current_issue: "Missing tournament reward",
+      category: "rewards",
+      reward_source: "tournament",
+      confirmed_facts: {},
+      known_fields: {},
+      pending_clarification: {
+        id: "expected_reward",
+        question: "How much was the expected reward?",
+        expected_answer_type: "money",
+      },
+      asked_checks: [],
+      answered_checks: [],
+    },
+    guidedMessageBody: {
+      content: "Got it. Is the reward still missing after checking the Prizes tab?",
+      message_type: "outgoing",
+      private: false,
+    },
+  });
+
+  assert.equal(result.json.supportState.current_issue, "Missing tournament reward");
+  assert.equal(result.json.supportState.known_fields.expected_reward, "$1");
+  assert.equal(result.json.supportState.pending_clarification.id, "checked_prizes_tab");
 });
 
 test("classifier validation fails closed on bad route", () => {

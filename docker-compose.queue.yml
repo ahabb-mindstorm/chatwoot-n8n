@@ -1,0 +1,146 @@
+x-n8n-environment: &n8n-environment
+  N8N_HOST: ${N8N_HOST:-0.0.0.0}
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+  WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+  GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+  TZ: ${TZ:-UTC}
+  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY to the key from the existing n8n instance}
+  DB_TYPE: postgresdb
+  DB_POSTGRESDB_HOST: postgres
+  DB_POSTGRESDB_PORT: 5432
+  DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n}
+  DB_POSTGRESDB_USER: ${POSTGRES_USER:-chatwoot_bot}
+  DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot_bot}
+  DB_POSTGRESDB_SCHEMA: public
+  EXECUTIONS_MODE: queue
+  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
+  EXECUTIONS_TIMEOUT: ${N8N_EXECUTIONS_TIMEOUT:-240}
+  EXECUTIONS_TIMEOUT_MAX: ${N8N_EXECUTIONS_TIMEOUT_MAX:-300}
+  N8N_AI_TIMEOUT_MAX: ${N8N_AI_TIMEOUT_MAX_MS:-180000}
+  EXECUTIONS_DATA_PRUNE: "true"
+  EXECUTIONS_DATA_MAX_AGE: ${N8N_EXECUTIONS_DATA_MAX_AGE_HOURS:-336}
+  EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${N8N_EXECUTIONS_DATA_PRUNE_MAX_COUNT:-10000}
+  N8N_DEFAULT_BINARY_DATA_MODE: database
+  QUEUE_BULL_REDIS_HOST: redis
+  QUEUE_BULL_REDIS_PORT: 6379
+  QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+  QUEUE_BULL_REDIS_DB: 0
+  QUEUE_BULL_REDIS_TIMEOUT_THRESHOLD: 10000
+  QUEUE_WORKER_LOCK_DURATION: 60000
+  QUEUE_WORKER_LOCK_RENEW_TIME: 10000
+  QUEUE_WORKER_STALLED_INTERVAL: 30000
+  QUEUE_WORKER_MAX_STALLED_COUNT: 1
+  QUEUE_HEALTH_CHECK_ACTIVE: "true"
+  N8N_GRACEFUL_SHUTDOWN_TIMEOUT: 30
+  CHATWOOT_BASE_URL: ${CHATWOOT_BASE_URL}
+  CHATWOOT_API_ACCESS_TOKEN: ${CHATWOOT_API_ACCESS_TOKEN}
+  CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID}
+  CHATWOOT_WEBHOOK_SECRET: ${CHATWOOT_WEBHOOK_SECRET:-}
+  CHATWOOT_WEBHOOK_AUTH_ENFORCED: ${CHATWOOT_WEBHOOK_AUTH_ENFORCED:-false}
+  CHATWOOT_INBOX_ID: ${CHATWOOT_INBOX_ID:-}
+  CHATWOOT_TYPING_INDICATORS: ${CHATWOOT_TYPING_INDICATORS:-true}
+  CHATWOOT_ESCALATION_TEAM_ID: ${CHATWOOT_ESCALATION_TEAM_ID:-}
+  CHATWOOT_ESCALATION_ASSIGNEE_ID: ${CHATWOOT_ESCALATION_ASSIGNEE_ID:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+  OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+  PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+  PINECONE_INDEX: ${PINECONE_INDEX:-pro-golf-support}
+  PINECONE_INDEX_HOST: ${PINECONE_INDEX_HOST:-}
+  PINECONE_NAMESPACE: ${PINECONE_NAMESPACE:-}
+  PINECONE_API_VERSION: ${PINECONE_API_VERSION:-2025-04}
+  PINECONE_MIGRATION_PREFIX: ${PINECONE_MIGRATION_PREFIX:-}
+  PGVECTOR_TABLE: ${PGVECTOR_TABLE:-progolf_faq_vectors}
+  PGVECTOR_SCHEMA: ${PGVECTOR_SCHEMA:-progolf_support}
+  PGVECTOR_MIGRATION_MAX_RECORDS: ${PGVECTOR_MIGRATION_MAX_RECORDS:-}
+  PGVECTOR_MIGRATION_RECREATE: ${PGVECTOR_MIGRATION_RECREATE:-false}
+  PGVECTOR_MIGRATION_PRUNE_STALE: ${PGVECTOR_MIGRATION_PRUNE_STALE:-false}
+  RAG_TOP_K: ${RAG_TOP_K:-5}
+  RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.72}
+  CLASSIFIER_MIN_CONFIDENCE: ${CLASSIFIER_MIN_CONFIDENCE:-0.65}
+  IDEMPOTENCY_WINDOW_MS: ${IDEMPOTENCY_WINDOW_MS:-120000}
+  CONVERSATION_DEBOUNCE_MS: ${CONVERSATION_DEBOUNCE_MS:-2000}
+  CONVERSATION_LEASE_SECONDS: ${CONVERSATION_LEASE_SECONDS:-300}
+  IDEMPOTENCY_RETENTION_DAYS: ${IDEMPOTENCY_RETENTION_DAYS:-30}
+  FAILED_TURN_THRESHOLD: ${FAILED_TURN_THRESHOLD:-2}
+  BOT_DB_HOST: ${BOT_DB_HOST:-postgres}
+  BOT_DB_PORT: ${BOT_DB_PORT:-5432}
+  BOT_DB_NAME: ${BOT_DB_NAME:-chatwoot_bot}
+  BOT_DB_USER: ${BOT_DB_USER:-chatwoot_bot}
+  BOT_DB_PASSWORD: ${BOT_DB_PASSWORD:-chatwoot_bot}
+  BOT_DB_SSL: ${BOT_DB_SSL:-false}
+  DEFAULT_GUIDED_FLOW_ID: ${DEFAULT_GUIDED_FLOW_ID:-support_main}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chatwoot_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-chatwoot_bot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatwoot_bot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatwoot_bot} -d ${POSTGRES_DB:-chatwoot_bot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment: *n8n-environment
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:5678/healthz >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  n8n-worker:
+    image: docker.n8n.io/n8nio/n8n:latest
+    command: ["worker", "--concurrency=${N8N_WORKER_CONCURRENCY:-5}"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment: *n8n-environment
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:5678/healthz >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+  postgres_data:
+  redis_data:

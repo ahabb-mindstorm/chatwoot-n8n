@@ -87,7 +87,42 @@ const rows = $input.all().map((item) => item.json).filter((row) => row && row.id
 const dbState = rows[0] || null;
 const pgError = pgOut.error || pgOut.message || pgOut.detail || null;
 const postgresFailed = Boolean(pgError);
-return [{ json: { ...base, dbState, postgresFailed, postgresError: pgError ? String(pgError) : null, stateId: dbState?.id || null } }];`;
+function objectOrEmpty(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  return {};
+}
+function normalizeSupportState(raw) {
+  const state = objectOrEmpty(raw);
+  const knownFields = objectOrEmpty(state.known_fields);
+  const confirmedFacts = objectOrEmpty(state.confirmed_facts);
+  return {
+    version: Number(state.version || 1),
+    current_issue: String(state.current_issue || ''),
+    category: String(state.category || ''),
+    reward_source: String(state.reward_source || ''),
+    confirmed_facts: confirmedFacts,
+    known_fields: knownFields,
+    pending_clarification: state.pending_clarification && typeof state.pending_clarification === 'object' ? state.pending_clarification : null,
+    asked_checks: Array.isArray(state.asked_checks) ? state.asked_checks.map(String) : [],
+    answered_checks: Array.isArray(state.answered_checks) ? state.answered_checks.map(String) : [],
+    last_bot_question: String(state.last_bot_question || ''),
+    last_bot_reply_summary: String(state.last_bot_reply_summary || ''),
+    last_supported_faq_ids: Array.isArray(state.last_supported_faq_ids) ? state.last_supported_faq_ids.map(String) : [],
+    turn_count: Number(state.turn_count || 0),
+    updated_at: state.updated_at || null
+  };
+}
+const supportState = normalizeSupportState(dbState?.support_state || dbState?.flow_state?.support_state || {});
+return [{ json: { ...base, dbState, supportState, postgresFailed, postgresError: pgError ? String(pgError) : null, stateId: dbState?.id || null } }];`;
 
 const idempotencyCode = `const base = $('Merge Bot State').first().json;
 const pgOut = $input.first().json || {};
@@ -285,7 +320,9 @@ const prompt = [
   'Classify the customer message into one route: guided_flow, faq, human_handoff, clarification.',
   'Return JSON only matching this schema:', JSON.stringify(schema),
   'Use clarification when intent is ambiguous. Use human_handoff for policy/risk issues.',
+  'Use support_state as the authoritative short-term support memory. If support_state.pending_clarification exists and the latest message is a short answer to it, classify the turn using support_state.current_issue/category/reward_source instead of treating the message as new or out of scope.',
   'Latest message:', $json.userText,
+  'Curated support_state:', JSON.stringify($json.supportState || {}),
   'Transcript:', $json.transcript || '(empty)',
   'Guardrails:', JSON.stringify($json.guardrailRiskFlags || []),
   'Existing bot state:', JSON.stringify($json.dbState || {})
@@ -320,7 +357,169 @@ const needsHuman = risky || !item.retrieval?.inScope || !answer || answer.length
 if (needsHuman) {
   return [{ json: { ...item, route: 'human_handoff', action: 'handoff', guidedAction: 'handoff', guidedMessageBody: null, publicAnswer: '', privateSummary: 'FAQ/RAG low confidence or unsafe | maxScore=' + (item.retrieval?.maxScore || 0), labelSuggestions: ['bot_escalated','faq_low_confidence'] } }];
 }
-return [{ json: { ...item, route: 'faq', action: 'reply', guidedAction: 'reply', guidedMessageBody: { content: answer, message_type: 'outgoing', private: false }, publicAnswer: answer, botStatus: 'active', flowStatus: 'idle', caseType: 'faq', intent: 'faq', privateSummary: 'FAQ answer from RAG', labelSuggestions: ['faq_answer'] } }];`;
+return [{ json: { ...item, route: 'faq', action: 'reply', guidedAction: 'reply', guidedMessageBody: { content: answer, message_type: 'outgoing', private: false }, publicAnswer: answer, botStatus: 'active', flowStatus: 'idle', caseType: 'faq', intent: 'faq', privateSummary: 'FAQ answer from RAG', labelSuggestions: ['faq_answer'], statePatch: { last_supported_faq_ids: (item.ragChunks || []).map((chunk) => String(chunk.id)).slice(0, 5) } } }];`;
+
+const mergeSupportStateCode = `const item = $input.first().json;
+const now = new Date().toISOString();
+function objectOrEmpty(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+function uniqueStrings(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : []).filter((value) => value !== undefined && value !== null && String(value).trim()).map((value) => String(value).trim()))).slice(0, 25);
+}
+function compactObject(value) {
+  const out = {};
+  for (const [key, raw] of Object.entries(objectOrEmpty(value))) {
+    if (raw === undefined || raw === null || raw === '') continue;
+    if (typeof raw === 'string') out[key] = raw.slice(0, 500);
+    else out[key] = raw;
+  }
+  return out;
+}
+function baseState(raw) {
+  const state = objectOrEmpty(raw);
+  return {
+    version: 1,
+    current_issue: String(state.current_issue || '').slice(0, 500),
+    category: String(state.category || '').slice(0, 80),
+    reward_source: String(state.reward_source || '').slice(0, 80),
+    confirmed_facts: compactObject(state.confirmed_facts),
+    known_fields: compactObject(state.known_fields),
+    pending_clarification: state.pending_clarification && typeof state.pending_clarification === 'object' ? state.pending_clarification : null,
+    asked_checks: uniqueStrings(state.asked_checks),
+    answered_checks: uniqueStrings(state.answered_checks),
+    last_bot_question: String(state.last_bot_question || '').slice(0, 500),
+    last_bot_reply_summary: String(state.last_bot_reply_summary || '').slice(0, 500),
+    last_supported_faq_ids: uniqueStrings(state.last_supported_faq_ids),
+    turn_count: Number(state.turn_count || 0),
+    updated_at: state.updated_at || null
+  };
+}
+function inferRewardSource(text, fallback = '') {
+  const s = String(text || '').toLowerCase();
+  if (/daily\\s*bonus|daily reward|daily cash/.test(s)) return 'daily_bonus';
+  if (/tournament|prize|prizes tab|results|leaderboard|ticket|tickets/.test(s)) return 'tournament';
+  if (/topshot|top shot/.test(s)) return 'topshot';
+  if (/loot|bag/.test(s)) return 'loot_bag';
+  return fallback;
+}
+function inferCategory(text, fallback = '') {
+  const s = String(text || '').toLowerCase();
+  if (/ticket|reward|prize|bonus|cash|withdraw|payment|purchase|loot|topshot/.test(s)) return 'rewards';
+  if (/login|account|phone|email|delete/.test(s)) return 'account';
+  if (/crash|bug|technical|loading|connection/.test(s)) return 'technical';
+  return fallback || 'support';
+}
+function amountFrom(text) {
+  const match = String(text || '').match(/(?:\\$|usd\\s*)?\\s*(\\d+(?:\\.\\d{1,2})?)\\s*(?:dollars?|usd)?/i);
+  return match ? match[0].trim() : '';
+}
+function isYes(text) {
+  return /^(yes|yeah|yep|yup|i have|yes i have|i did|done|checked|i checked|already did)$/i.test(String(text || '').trim());
+}
+function isNo(text) {
+  return /^(no|nope|nah|not yet|i have not|haven't|didn't)$/i.test(String(text || '').trim());
+}
+function answeredPending(pending, text) {
+  if (!pending) return { answered: false, facts: {}, fields: {}, checks: [] };
+  const id = String(pending.id || pending.field || 'follow_up');
+  const type = String(pending.expected_answer_type || pending.type || '').toLowerCase();
+  const yes = isYes(text);
+  const no = isNo(text);
+  const amount = amountFrom(text);
+  const facts = {};
+  const fields = {};
+  const checks = [];
+  if ((type === 'boolean' || /played|checked|confirm/.test(id)) && (yes || no)) {
+    facts[id] = yes;
+    if (/prizes|checked|confirm|concluded/.test(id)) checks.push(id);
+    return { answered: true, facts, fields, checks };
+  }
+  if ((type === 'money' || /amount|reward/.test(id)) && amount) {
+    fields[id] = amount;
+    return { answered: true, facts, fields, checks };
+  }
+  if (/still missing|still not|not there|missing/i.test(String(text || ''))) {
+    facts[id + '_still_missing'] = true;
+    checks.push(id);
+    return { answered: true, facts, fields, checks };
+  }
+  if (String(text || '').trim().length > 2 && String(text || '').trim().length < 200) {
+    fields[id] = String(text || '').trim().slice(0, 200);
+    return { answered: true, facts, fields, checks };
+  }
+  return { answered: false, facts: {}, fields: {}, checks: [] };
+}
+function pendingFromBotReply(text) {
+  const s = String(text || '').trim();
+  if (!s || !/[?？]\\s*$/.test(s)) return null;
+  const lower = s.toLowerCase();
+  if (/playing any tournaments|played any tournaments|playing tournaments|played tournaments/.test(lower)) return { id: 'played_tournaments', question: s.slice(0, 500), expected_answer_type: 'boolean', asked_at: now };
+  if (/how much|amount|expected reward|reward amount/.test(lower)) return { id: 'expected_reward', question: s.slice(0, 500), expected_answer_type: 'money', asked_at: now };
+  if (/prizes tab/.test(lower)) return { id: 'checked_prizes_tab', question: s.slice(0, 500), expected_answer_type: 'boolean', asked_at: now };
+  if (/tournament.*conclud|result.*pending|final/.test(lower)) return { id: 'confirmed_tournament_concluded', question: s.slice(0, 500), expected_answer_type: 'boolean', asked_at: now };
+  return { id: 'follow_up', question: s.slice(0, 500), expected_answer_type: /\\b(did|have|are|is|was|can|could|would)\\b/i.test(s) ? 'boolean' : 'free_text', asked_at: now };
+}
+function checksFromBotReply(text) {
+  const lower = String(text || '').toLowerCase();
+  const checks = [];
+  if (/prizes tab/.test(lower)) checks.push('check_prizes_tab');
+  if (/tournament.*conclud|concluded|final results/.test(lower)) checks.push('confirm_tournament_concluded');
+  if (/restart|reopen|close and reopen/.test(lower)) checks.push('restart_app');
+  if (/update.*app|latest version/.test(lower)) checks.push('update_app');
+  if (/support ticket|contact support|human/.test(lower)) checks.push('contact_support');
+  return checks;
+}
+function summaryFrom(text) {
+  return String(text || '').replace(/\\s+/g, ' ').trim().slice(0, 500);
+}
+const previous = baseState(item.supportState || item.dbState?.support_state || {});
+const text = String(item.userText || '').trim();
+const botReply = String(item.guidedMessageBody?.content || item.publicAnswer || '').trim();
+const pendingAnswer = answeredPending(previous.pending_clarification, text);
+const answeredShortFollowUp = pendingAnswer.answered && previous.current_issue;
+const next = {
+  ...previous,
+  turn_count: previous.turn_count + 1,
+  current_issue: answeredShortFollowUp ? previous.current_issue : (summaryFrom(text) || previous.current_issue),
+  category: answeredShortFollowUp && previous.category ? previous.category : inferCategory(text, previous.category || item.caseType),
+  reward_source: inferRewardSource(text, previous.reward_source),
+  confirmed_facts: { ...previous.confirmed_facts, ...pendingAnswer.facts },
+  known_fields: { ...previous.known_fields, ...pendingAnswer.fields },
+  pending_clarification: pendingAnswer.answered ? null : previous.pending_clarification,
+  answered_checks: uniqueStrings([...(previous.answered_checks || []), ...pendingAnswer.checks]),
+  last_bot_reply_summary: summaryFrom(botReply) || previous.last_bot_reply_summary,
+  last_supported_faq_ids: uniqueStrings([...(item.statePatch?.last_supported_faq_ids || []), ...(previous.last_supported_faq_ids || [])]),
+  updated_at: now
+};
+if (item.classifier?.case_type) next.category = inferCategory(text, item.classifier.case_type);
+if (item.classifier?.summary && !next.current_issue) next.current_issue = summaryFrom(item.classifier.summary);
+if (botReply) {
+  const pending = pendingFromBotReply(botReply);
+  next.pending_clarification = pending || next.pending_clarification;
+  next.last_bot_question = pending ? pending.question : previous.last_bot_question;
+  next.asked_checks = uniqueStrings([...(previous.asked_checks || []), ...checksFromBotReply(botReply)]);
+}
+if (item.action === 'handoff') {
+  next.pending_clarification = null;
+}
+const supportState = {
+  version: 1,
+  current_issue: next.current_issue,
+  category: next.category,
+  reward_source: next.reward_source,
+  confirmed_facts: compactObject(next.confirmed_facts),
+  known_fields: compactObject(next.known_fields),
+  pending_clarification: next.pending_clarification,
+  asked_checks: uniqueStrings(next.asked_checks),
+  answered_checks: uniqueStrings(next.answered_checks),
+  last_bot_question: next.last_bot_question,
+  last_bot_reply_summary: next.last_bot_reply_summary,
+  last_supported_faq_ids: uniqueStrings(next.last_supported_faq_ids),
+  turn_count: next.turn_count,
+  updated_at: next.updated_at
+};
+return [{ json: { ...item, supportState, supportStateVersion: 1, auditContext: { ...(item.auditContext || {}), support_state: { category: supportState.category, reward_source: supportState.reward_source, pending_clarification: supportState.pending_clarification?.id || null, asked_checks: supportState.asked_checks, answered_checks: supportState.answered_checks } } } }];`;
 
 function node(id, name, type, position, parameters, extra = {}) {
   return {
@@ -463,8 +662,8 @@ const nodes = [
   node("pg-rag-context", "Build RAG Context", "n8n-nodes-base.code", [2440, 640], { jsCode: ragContextCode }, { typeVersion: 2 }),
   node("pg-faq-agent", "RAG FAQ Answer", "@n8n/n8n-nodes-langchain.agent", [2660, 640], {
     promptType: "define",
-    text: "={{ 'Answer ONLY from knowledge. If unsure, reply NEEDS_HUMAN.\\nMessage: ' + $json.userText + '\\nKnowledge: ' + JSON.stringify($json.ragChunks || []) }}",
-    options: { systemMessage: "You are a grounded FAQ assistant. Use only provided knowledge chunks." },
+    text: "={{ 'Answer ONLY from knowledge. If unsure, reply NEEDS_HUMAN.\\nUse support_state as curated memory for this conversation. If the latest message is a short answer to support_state.pending_clarification, interpret it in that context. Do not repeat checks already listed in support_state.asked_checks or support_state.answered_checks.\\nMessage: ' + $json.userText + '\\nSupport state: ' + JSON.stringify($json.supportState || {}) + '\\nKnowledge: ' + JSON.stringify($json.ragChunks || []) }}",
+    options: { systemMessage: "You are a grounded FAQ assistant. Treat retrieved FAQs as operational playbooks and use only provided knowledge chunks." },
   }, { typeVersion: 1.7 }),
   node("pg-faq-model", "OpenAI FAQ Model", "@n8n/n8n-nodes-langchain.lmChatOpenAi", [2660, 860], {
     model: { __rl: true, mode: "id", value: "={{ $env.OPENAI_MODEL || 'gpt-4o-mini' }}" },
@@ -473,65 +672,66 @@ const nodes = [
   node("pg-faq-eval", "Evaluate FAQ Answer", "n8n-nodes-base.code", [2880, 640], { jsCode: faqAnswerCode }, { typeVersion: 2 }),
   ifNode("pg-faq-if", "FAQ OK?", [3100, 640], "={{ $json.action }}", "handoff", "string", "notEquals"),
   node("pg-merge-outcome", "Merge Bot Outcome", "n8n-nodes-base.code", [3320, 320], { jsCode: mergeOutcomeCode }, { typeVersion: 2 }),
-  node("pg-persist-state", "Persist Bot State", "n8n-nodes-base.postgres", [3540, 320], {
+  node("pg-merge-support-state", "Merge Support State", "n8n-nodes-base.code", [3540, 320], { jsCode: mergeSupportStateCode }, { typeVersion: 2, notes: "Deterministically merges support_state from prior Postgres memory, latest user turn, FAQ result, and bot reply. Full support_state stays in Postgres, not Chatwoot." }),
+  node("pg-persist-state", "Persist Bot State", "n8n-nodes-base.postgres", [3760, 320], {
     operation: "executeQuery",
-    query: "INSERT INTO bot_conversation_state (account_id, conversation_id, contact_id, bot_status, active_flow_id, active_flow_version, current_node, current_step, flow_status, flow_state, last_intent, case_type, agent_summary, last_message_id, last_seen_at, failed_turn_count, clarification_pending, updated_at) VALUES ({{ $json.accountId }}, {{ $json.conversationId }}, {{ $json.contactId || 0 }}, {{ $json.botStatus || 'idle' }}, {{ $json.activeFlowId || null }}, {{ $json.flowVersion || null }}, {{ $json.currentNode || null }}, {{ $json.currentStep || null }}, {{ $json.flowStatus || 'idle' }}, '{{ JSON.stringify($json.persistFlowState || {}) }}'::jsonb, {{ $json.intent || null }}, {{ $json.caseType || null }}, {{ ($json.lightweightAttributes || {}).agent_summary || null }}, {{ $json.messageId }}, NOW(), {{ $json.dbState?.failed_turn_count || 0 }}, {{ $json.clarificationPending === true }}, NOW()) ON CONFLICT (account_id, conversation_id, contact_id) DO UPDATE SET bot_status = EXCLUDED.bot_status, active_flow_id = EXCLUDED.active_flow_id, active_flow_version = EXCLUDED.active_flow_version, current_node = EXCLUDED.current_node, current_step = EXCLUDED.current_step, flow_status = EXCLUDED.flow_status, flow_state = EXCLUDED.flow_state, last_intent = EXCLUDED.last_intent, case_type = EXCLUDED.case_type, agent_summary = EXCLUDED.agent_summary, last_message_id = EXCLUDED.last_message_id, last_seen_at = NOW(), clarification_pending = EXCLUDED.clarification_pending, updated_at = NOW() RETURNING id;",
+    query: "INSERT INTO bot_conversation_state (account_id, conversation_id, contact_id, bot_status, active_flow_id, active_flow_version, current_node, current_step, flow_status, flow_state, support_state, support_state_version, last_intent, case_type, agent_summary, last_message_id, last_seen_at, failed_turn_count, clarification_pending, updated_at) VALUES ({{ $json.accountId }}, {{ $json.conversationId }}, {{ $json.contactId || 0 }}, {{ $json.botStatus || 'idle' }}, {{ $json.activeFlowId || null }}, {{ $json.flowVersion || null }}, {{ $json.currentNode || null }}, {{ $json.currentStep || null }}, {{ $json.flowStatus || 'idle' }}, '{{ JSON.stringify($json.persistFlowState || {}).replace(/'/g, \"''\") }}'::jsonb, '{{ JSON.stringify($json.supportState || {}).replace(/'/g, \"''\") }}'::jsonb, {{ $json.supportStateVersion || 1 }}, {{ $json.intent || null }}, {{ $json.caseType || null }}, {{ ($json.lightweightAttributes || {}).agent_summary || null }}, {{ $json.messageId }}, NOW(), {{ $json.dbState?.failed_turn_count || 0 }}, {{ $json.clarificationPending === true }}, NOW()) ON CONFLICT (account_id, conversation_id, contact_id) DO UPDATE SET bot_status = EXCLUDED.bot_status, active_flow_id = EXCLUDED.active_flow_id, active_flow_version = EXCLUDED.active_flow_version, current_node = EXCLUDED.current_node, current_step = EXCLUDED.current_step, flow_status = EXCLUDED.flow_status, flow_state = EXCLUDED.flow_state, support_state = EXCLUDED.support_state, support_state_version = EXCLUDED.support_state_version, last_intent = EXCLUDED.last_intent, case_type = EXCLUDED.case_type, agent_summary = EXCLUDED.agent_summary, last_message_id = EXCLUDED.last_message_id, last_seen_at = NOW(), clarification_pending = EXCLUDED.clarification_pending, updated_at = NOW() RETURNING id;",
     options: {},
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-persist-sub", "Persist Flow Submission", "n8n-nodes-base.postgres", [3760, 320], {
+  node("pg-persist-sub", "Persist Flow Submission", "n8n-nodes-base.postgres", [3980, 320], {
     operation: "executeQuery",
     query: "={{ $json.pendingSubmission ? \"INSERT INTO bot_flow_submissions (state_id, account_id, conversation_id, contact_id, flow_id, flow_version, node_id, submission_key, fields, raw_submission, source_message_id) VALUES ((SELECT id FROM bot_conversation_state WHERE account_id = \" + $json.accountId + \" AND conversation_id = \" + $json.conversationId + \" AND contact_id = \" + ($json.contactId || 0) + \" LIMIT 1), \" + $json.accountId + \", \" + $json.conversationId + \", \" + ($json.contactId || 0) + \", '\" + $json.pendingSubmission.flow_id + \"', \" + ($json.pendingSubmission.flow_version || 1) + \", '\" + $json.pendingSubmission.node_id + \"', '\" + $json.pendingSubmission.submission_key + \"', '\" + JSON.stringify($json.pendingSubmission.fields).replace(/'/g, \"''\") + \"'::jsonb, '\" + JSON.stringify($json.pendingSubmission.raw_submission).replace(/'/g, \"''\") + \"'::jsonb, '\" + $json.pendingSubmission.source_message_id + \"') ON CONFLICT (submission_key) DO NOTHING\" : \"SELECT 1 WHERE false\" }}",
     options: {},
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-persist-audit", "Persist Audit Event", "n8n-nodes-base.postgres", [3980, 320], {
+  node("pg-persist-audit", "Persist Audit Event", "n8n-nodes-base.postgres", [4200, 320], {
     operation: "executeQuery",
-    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, route, intent, case_type, confidence, risk_flags, context) VALUES ({{ $('Merge Bot Outcome').first().json.accountId }}, {{ $('Merge Bot Outcome').first().json.conversationId }}, {{ $('Merge Bot Outcome').first().json.contactId || 0 }}, '{{ String($('Merge Bot Outcome').first().json.messageId).replace(/'/g, \"''\") }}', '{{ String($('Merge Bot Outcome').first().json.auditEventType || 'route_decision').replace(/'/g, \"''\") }}', '{{ ('audit:' + $('Merge Bot Outcome').first().json.dedupeKey).replace(/'/g, \"''\") }}', {{ $json.route ? \"'\" + String($('Merge Bot Outcome').first().json.route).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.intent ? \"'\" + String($('Merge Bot Outcome').first().json.intent).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.caseType ? \"'\" + String($('Merge Bot Outcome').first().json.caseType).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $('Merge Bot Outcome').first().json.classifier?.confidence ?? 'NULL' }}, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext?.risk_flags || []).replace(/'/g, \"''\") }}'::jsonb, '{{ JSON.stringify($('Merge Bot Outcome').first().json.auditContext || {}).replace(/'/g, \"''\") }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
+    query: "INSERT INTO bot_audit_events (account_id, conversation_id, contact_id, source_message_id, event_type, dedupe_key, route, intent, case_type, confidence, risk_flags, context) VALUES ({{ $('Merge Support State').first().json.accountId }}, {{ $('Merge Support State').first().json.conversationId }}, {{ $('Merge Support State').first().json.contactId || 0 }}, '{{ String($('Merge Support State').first().json.messageId).replace(/'/g, \"''\") }}', '{{ String($('Merge Support State').first().json.auditEventType || 'route_decision').replace(/'/g, \"''\") }}', '{{ ('audit:' + $('Merge Support State').first().json.dedupeKey).replace(/'/g, \"''\") }}', {{ $json.route ? \"'\" + String($('Merge Support State').first().json.route).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.intent ? \"'\" + String($('Merge Support State').first().json.intent).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $json.caseType ? \"'\" + String($('Merge Support State').first().json.caseType).replace(/'/g, \"''\") + \"'\" : 'NULL' }}, {{ $('Merge Support State').first().json.classifier?.confidence ?? 'NULL' }}, '{{ JSON.stringify($('Merge Support State').first().json.auditContext?.risk_flags || []).replace(/'/g, \"''\") }}'::jsonb, '{{ JSON.stringify($('Merge Support State').first().json.auditContext || {}).replace(/'/g, \"''\") }}'::jsonb) ON CONFLICT (dedupe_key) DO NOTHING RETURNING id;",
     options: {},
   }, { typeVersion: 2.5, credentials: pgCred, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-update-attrs", "Update Chatwoot Custom Attributes", "n8n-nodes-base.httpRequest", [4200, 320], {
+  node("pg-update-attrs", "Update Chatwoot Custom Attributes", "n8n-nodes-base.httpRequest", [4420, 320], {
     method: "POST",
-    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/custom_attributes' }}",
+    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Support State').first().json.accountId + '/conversations/' + $('Merge Support State').first().json.conversationId + '/custom_attributes' }}",
     sendHeaders: true,
     headerParameters: { parameters: [{ name: "api_access_token", value: "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { name: "Content-Type", value: "application/json" }] },
     sendBody: true,
     specifyBody: "json",
-    jsonBody: "={{ JSON.stringify({ custom_attributes: Object.assign({}, $('Merge Bot Outcome').first().json.customAttributes || {}, $('Merge Bot Outcome').first().json.lightweightAttributes || {}) }) }}",
+    jsonBody: "={{ JSON.stringify({ custom_attributes: Object.assign({}, $('Merge Support State').first().json.customAttributes || {}, $('Merge Support State').first().json.lightweightAttributes || {}) }) }}",
     options: { timeout: 30000 },
   }, { typeVersion: 4.2, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  ifNode("pg-action-if", "Needs public reply?", [4420, 320], "={{ $('Merge Bot Outcome').first().json.action }}", "handoff", "string", "notEquals"),
-  node("pg-send-reply", "Send Chatwoot Reply", "n8n-nodes-base.httpRequest", [4640, 200], {
+  ifNode("pg-action-if", "Needs public reply?", [4640, 320], "={{ $('Merge Support State').first().json.action }}", "handoff", "string", "notEquals"),
+  node("pg-send-reply", "Send Chatwoot Reply", "n8n-nodes-base.httpRequest", [4860, 200], {
     method: "POST",
-    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/messages' }}",
+    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Support State').first().json.accountId + '/conversations/' + $('Merge Support State').first().json.conversationId + '/messages' }}",
     sendHeaders: true,
     headerParameters: { parameters: [{ name: "api_access_token", value: "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { name: "Content-Type", value: "application/json" }] },
     sendBody: true,
     specifyBody: "json",
-    jsonBody: "={{ JSON.stringify($('Merge Bot Outcome').first().json.guidedMessageBody || { content: $('Merge Bot Outcome').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
+    jsonBody: "={{ JSON.stringify($('Merge Support State').first().json.guidedMessageBody || { content: $('Merge Support State').first().json.publicAnswer, message_type: 'outgoing', private: false }) }}",
     options: { timeout: 30000 },
   }, { typeVersion: 4.2 }),
-  node("pg-labels", "Add Labels", "n8n-nodes-base.httpRequest", [4640, 440], {
+  node("pg-labels", "Add Labels", "n8n-nodes-base.httpRequest", [4860, 440], {
     method: "POST",
-    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/labels' }}",
+    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Support State').first().json.accountId + '/conversations/' + $('Merge Support State').first().json.conversationId + '/labels' }}",
     sendHeaders: true,
     headerParameters: { parameters: [{ name: "api_access_token", value: "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { name: "Content-Type", value: "application/json" }] },
     sendBody: true,
     specifyBody: "json",
-    jsonBody: "={{ JSON.stringify({ labels: Array.from(new Set(['n8n_bot'].concat($('Merge Bot Outcome').first().json.labelSuggestions || []))) }) }}",
+    jsonBody: "={{ JSON.stringify({ labels: Array.from(new Set(['n8n_bot'].concat($('Merge Support State').first().json.labelSuggestions || []))) }) }}",
     options: { timeout: 30000 },
   }, { typeVersion: 4.2, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-private-note", "Private Note", "n8n-nodes-base.httpRequest", [4860, 440], {
+  node("pg-private-note", "Private Note", "n8n-nodes-base.httpRequest", [5080, 440], {
     method: "POST",
-    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId + '/messages' }}",
+    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Support State').first().json.accountId + '/conversations/' + $('Merge Support State').first().json.conversationId + '/messages' }}",
     sendHeaders: true,
     headerParameters: { parameters: [{ name: "api_access_token", value: "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { name: "Content-Type", value: "application/json" }] },
     sendBody: true,
     specifyBody: "json",
-    jsonBody: "={{ JSON.stringify({ content: '[n8n postgres bot] ' + ($('Merge Bot Outcome').first().json.privateSummary || ''), message_type: 'outgoing', private: true }) }}",
+    jsonBody: "={{ JSON.stringify({ content: '[n8n postgres bot] ' + ($('Merge Support State').first().json.privateSummary || ''), message_type: 'outgoing', private: true }) }}",
     options: { timeout: 30000 },
   }, { typeVersion: 4.2, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-assign", "Assign Team", "n8n-nodes-base.httpRequest", [5080, 440], {
+  node("pg-assign", "Assign Team", "n8n-nodes-base.httpRequest", [5300, 440], {
     method: "PATCH",
-    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Bot Outcome').first().json.accountId + '/conversations/' + $('Merge Bot Outcome').first().json.conversationId }}",
+    url: "={{ $env.CHATWOOT_BASE_URL + '/api/v1/accounts/' + $('Merge Support State').first().json.accountId + '/conversations/' + $('Merge Support State').first().json.conversationId }}",
     sendHeaders: true,
     headerParameters: { parameters: [{ name: "api_access_token", value: "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}" }, { name: "Content-Type", value: "application/json" }] },
     sendBody: true,
@@ -539,13 +739,13 @@ const nodes = [
     jsonBody: "={{ JSON.stringify(Object.assign({}, { status: 'open' }, $env.CHATWOOT_ESCALATION_TEAM_ID ? { team_id: Number($env.CHATWOOT_ESCALATION_TEAM_ID) } : {}, $env.CHATWOOT_ESCALATION_ASSIGNEE_ID ? { assignee_id: Number($env.CHATWOOT_ESCALATION_ASSIGNEE_ID) } : {})) }}",
     options: { timeout: 30000 },
   }, { typeVersion: 4.2, alwaysOutputData: true, onError: "continueRegularOutput" }),
-  node("pg-resp-ok", "Respond OK (handled)", "n8n-nodes-base.respondToWebhook", [4860, 200], {
+  node("pg-resp-ok", "Respond OK (handled)", "n8n-nodes-base.respondToWebhook", [5080, 200], {
     respondWith: "json",
-    responseBody: "={{ JSON.stringify({ ok: true, route: $('Merge Bot Outcome').first().json.route, action: $('Merge Bot Outcome').first().json.action }) }}",
+    responseBody: "={{ JSON.stringify({ ok: true, route: $('Merge Support State').first().json.route, action: $('Merge Support State').first().json.action }) }}",
   }, { typeVersion: 1.1 }),
-  node("pg-resp-handoff", "Respond OK (handoff)", "n8n-nodes-base.respondToWebhook", [5300, 440], {
+  node("pg-resp-handoff", "Respond OK (handoff)", "n8n-nodes-base.respondToWebhook", [5520, 440], {
     respondWith: "json",
-    responseBody: "={{ JSON.stringify({ ok: true, route: $('Merge Bot Outcome').first().json.route, action: $('Merge Bot Outcome').first().json.action }) }}",
+    responseBody: "={{ JSON.stringify({ ok: true, route: $('Merge Support State').first().json.route, action: $('Merge Support State').first().json.action }) }}",
   }, { typeVersion: 1.1 }),
 ];
 
@@ -619,7 +819,8 @@ link("FAQ OK?", "Human Handoff", 1);
 // Converge + persist + respond
 link("Clarification Reply", "Merge Bot Outcome");
 link("Human Handoff", "Merge Bot Outcome");
-link("Merge Bot Outcome", "Persist Bot State");
+link("Merge Bot Outcome", "Merge Support State");
+link("Merge Support State", "Persist Bot State");
 link("Persist Bot State", "Persist Flow Submission");
 link("Persist Flow Submission", "Persist Audit Event");
 link("Persist Audit Event", "Update Chatwoot Custom Attributes");
@@ -654,7 +855,7 @@ const requiredNames = [
   "Router: Active Flow?", "Fetch Guided Flow", "Continue Guided Flow", "Classify Message",
   "Classifier Structured Output Parser", "Validate Classifier Output", "Route Intent",
   "RAG FAQ Answer", "Start Guided Flow", "Clarification Reply", "Human Handoff",
-  "Merge Bot Outcome", "Persist Bot State", "Persist Flow Submission", "Persist Audit Event",
+  "Merge Bot Outcome", "Merge Support State", "Persist Bot State", "Persist Flow Submission", "Persist Audit Event",
   "Update Chatwoot Custom Attributes", "Add Labels", "Private Note", "Assign Team", "Send Chatwoot Reply",
 ];
 const nameSet = new Set(nodes.map((n) => n.name));

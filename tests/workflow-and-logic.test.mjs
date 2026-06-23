@@ -35,6 +35,57 @@ async function runCodeNode(workflow, nodeName, item, context = {}) {
   });
 }
 
+function metadataRoutingFlow() {
+  return {
+    version: 1,
+    entry: "main",
+    nodes: {
+      main: {
+        type: "options",
+        prompt: "Main menu",
+        options: [{ id: "gameissues", text: "Game Issues", target: "gameissues" }],
+      },
+      missing_reward: {
+        type: "form",
+        prompt: "Please provide details.",
+        routing: {
+          allowDirectRouting: true,
+          intent: "missing_reward",
+          description: "Route here when user reports missing, lost, or unreceived rewards.",
+          examples: ["I did not get my reward"],
+          negative_examples: ["How do rewards work?"],
+        },
+        fields: [{ id: "details", label: "Details", type: "text", required: true }],
+        submitTarget: "human",
+      },
+      gameissues: {
+        type: "options",
+        prompt: "What game issue?",
+        options: [
+          {
+            id: "missing_reward",
+            text: "Missing Reward",
+            target: "missing_reward",
+            routing: {
+              description: "Choose this option when user says a reward is missing.",
+              examples: ["missing reward"],
+            },
+          },
+        ],
+      },
+      faqCheck_13: { type: "faqCheck", prompt: "Checking FAQ", target: "report_shared" },
+      report_shared: { type: "text", content: "Report shared.", next: "human" },
+      human: { type: "human" },
+    },
+  };
+}
+
+async function runEvaluateRagAnswer(workflow, upstream) {
+  return runCodeNode(workflow, "Evaluate RAG Answer", {}, {
+    $: () => ({ first: () => ({ json: upstream }) }),
+  });
+}
+
 test("workflow JSON parses", () => {
   const raw = readFileSync(join(rootDir, "workflows/chatwoot-support-bot.json"), "utf8");
   JSON.parse(raw);
@@ -97,6 +148,16 @@ test("v3 workflow resets guided state on resolved status changes", async () => {
   assert.equal(reset.customAttributes.n8n_guided_flow.resolved, true);
   assert.equal(Array.isArray(reset.customAttributes.n8n_guided_flow.path), true);
   assert.equal(reset.customAttributes.n8n_guided_flow.path.length, 0);
+});
+
+test("v3 handoff public reply includes conversation id as ticket id", () => {
+  const workflow = loadV3Workflow();
+  const handoffReply = workflow.nodes.find((node) => node.name === "Chatwoot Handoff Public Reply");
+  assert.ok(handoffReply, "Chatwoot Handoff Public Reply node exists");
+  const jsonBody = handoffReply.parameters.jsonBody;
+  assert.ok(jsonBody.includes("conversationId"), "handoff reply should reference conversationId");
+  assert.ok(jsonBody.includes("Ticket ID"), "handoff reply should include Ticket ID copy");
+  assert.ok(jsonBody.includes("ticket\\s*id\\s*:"), "handoff reply should avoid duplicating ticket id");
 });
 
 test("workflow contains planned AI Agent and context nodes", () => {
@@ -290,6 +351,182 @@ test("guided LLM mode sends actual customer questions to AI", async () => {
   assert.equal(routed.nextGuidedState.current_node, "llm");
   assert.equal(routed.nextGuidedState.step, "llm_support");
   assert.equal(routed.guidedState.step, "llm_support");
+});
+
+test("v3 route context exposes routing metadata and hides control nodes", async () => {
+  const workflow = loadV3Workflow();
+  const [{ json: routed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    conversationId: 1,
+    customAttributes: {
+      n8n_guided_flow: {
+        current_node: "main",
+        mode: "options",
+        step: "options",
+      },
+    },
+    guidedFlow: metadataRoutingFlow(),
+    userText: "missing reward",
+    submittedValues: [],
+    guardrailRiskFlags: [],
+  });
+
+  assert.equal(routed.guidedAction, "llm");
+  const targets = routed.routeContext.guided_entry_targets;
+  const byId = new Map(targets.map((target) => [target.id, target]));
+
+  assert.equal(byId.get("missing_reward").routing.intent, "missing_reward");
+  assert.equal(byId.get("missing_reward").direct, true);
+  assert.equal(byId.has("gameissues"), false);
+  assert.equal(byId.has("faqCheck_13"), false);
+  assert.equal(byId.has("human"), false);
+  assert.equal(byId.has("report_shared"), false);
+});
+
+test("v3 route context keeps legacy fallback when flow has no routing metadata", async () => {
+  const workflow = loadV3Workflow();
+  const flow = {
+    version: 1,
+    entry: "main",
+    nodes: {
+      main: { type: "options", prompt: "Main", options: [] },
+      game_issue_form: { type: "form", prompt: "Game issue", fields: [] },
+      faqCheck_13: { type: "faqCheck", prompt: "FAQ", target: "human" },
+      human: { type: "human" },
+    },
+  };
+  const [{ json: routed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    conversationId: 1,
+    customAttributes: {
+      n8n_guided_flow: {
+        current_node: "main",
+        mode: "options",
+        step: "options",
+      },
+    },
+    guidedFlow: flow,
+    userText: "game froze",
+    submittedValues: [],
+    guardrailRiskFlags: [],
+  });
+
+  const targetIds = Array.from(routed.routeContext.guided_entry_targets, (target) => target.id);
+  assert.deepEqual(targetIds, ["game_issue_form"]);
+});
+
+test("v3 evaluates direct routing only for explicit routing targets", async () => {
+  const workflow = loadV3Workflow();
+  const flow = metadataRoutingFlow();
+  const [{ json: routed }] = await runEvaluateRagAnswer(workflow, {
+    conversationId: 1,
+    guidedFlow: flow,
+    guidedState: { current_node: "main", path: [], form_data: {} },
+    routeContext: {
+      guided_entry_targets: [
+        {
+          id: "missing_reward",
+          type: "form",
+          direct: true,
+          routing: flow.nodes.missing_reward.routing,
+          options: [],
+        },
+      ],
+    },
+    guardrailRiskFlags: [],
+    guardrailLabels: [],
+    agentOutput: {
+      route: "guided_flow",
+      start_node: "missing_reward",
+      confidence: 0.9,
+      risk_flags: [],
+      labels: [],
+      knowledge_used: [],
+      private_summary: "Route to missing reward",
+    },
+  });
+
+  assert.equal(routed.guidedAction, "guided_reply");
+  assert.equal(routed.nextGuidedState.current_node, "missing_reward");
+  assert.match(routed.guidedMessageBody.content, /provide details/i);
+});
+
+test("v3 ignores start_option and does not route through parent option nodes", async () => {
+  const workflow = loadV3Workflow();
+  const flow = metadataRoutingFlow();
+  const [{ json: routed }] = await runEvaluateRagAnswer(workflow, {
+    conversationId: 1,
+    guidedFlow: flow,
+    guidedState: { current_node: "main", path: [], form_data: {} },
+    routeContext: {
+      guided_entry_targets: [
+        {
+          id: "missing_reward",
+          type: "form",
+          direct: true,
+          routing: flow.nodes.missing_reward.routing,
+        },
+      ],
+    },
+    guardrailRiskFlags: [],
+    guardrailLabels: [],
+    agentOutput: {
+      route: "guided_flow",
+      start_node: "gameissues",
+      start_option: "missing_reward",
+      confidence: 0.9,
+      risk_flags: [],
+      labels: [],
+      knowledge_used: [],
+      private_summary: "Option route should be ignored",
+    },
+  });
+
+  assert.equal(routed.guidedAction, "handoff");
+  assert.match(routed.privateSummary, /invalid_guided_route=true/);
+});
+
+test("v3 rejects silent control nodes unless routing opts in", async () => {
+  const workflow = loadV3Workflow();
+  const flow = metadataRoutingFlow();
+  const [{ json: rejected }] = await runEvaluateRagAnswer(workflow, {
+    conversationId: 1,
+    guidedFlow: flow,
+    guidedState: { current_node: "main", path: [], form_data: {} },
+    routeContext: { guided_entry_targets: [{ id: "missing_reward", direct: true }] },
+    guardrailRiskFlags: [],
+    guardrailLabels: [],
+    agentOutput: {
+      route: "guided_flow",
+      start_node: "faqCheck_13",
+      confidence: 0.9,
+      risk_flags: [],
+      labels: [],
+      knowledge_used: [],
+      private_summary: "Bad target",
+    },
+  });
+
+  assert.equal(rejected.guidedAction, "handoff");
+  assert.match(rejected.privateSummary, /invalid_guided_route=true/);
+
+  flow.nodes.faqCheck_13.routing = { allowDirectRouting: true, intent: "faq_check" };
+  const [{ json: exposed }] = await runCodeNode(workflow, "Guided Flow Router", {
+    conversationId: 1,
+    customAttributes: {
+      n8n_guided_flow: {
+        current_node: "main",
+        mode: "options",
+        step: "options",
+      },
+    },
+    guidedFlow: flow,
+    userText: "unknown issue",
+    submittedValues: [],
+    guardrailRiskFlags: [],
+  });
+
+  const faqCheckTarget = exposed.routeContext.guided_entry_targets.find((target) => target.id === "faqCheck_13");
+  assert.equal(faqCheckTarget.direct, true);
+  assert.equal(faqCheckTarget.routing.intent, "faq_check");
 });
 
 test("workflow lets LLM own intent and knowledge selection", () => {

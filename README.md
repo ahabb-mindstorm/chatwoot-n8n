@@ -17,6 +17,8 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
 3. Apply bot-state schema:
    ```bash
    docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/001_bot_support_state.sql
+   docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/006_idempotency_debounce.sql
+   docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/007_agent_bot_kill_switch.sql
    ```
    From the host (default mapped port `5433`):
    ```bash
@@ -31,9 +33,46 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
 7. Run `bash scripts/setup-agent-bot.sh` **or** create bot in UI and paste the same URL.  
 8. Use `CHATWOOT_API_ACCESS_TOKEN` that can create agent bots, attach inbox bots, and post conversation messages for the account.  
 
-### Webhook secret (optional)
+### Chatwoot webhook authentication
 
-Set `CHATWOOT_WEBHOOK_SECRET` in `.env` and terminate TLS in front of n8n with a tiny proxy that injects `X-Webhook-Secret` on allowed paths. Chatwoot cannot set arbitrary headers natively — only use where you terminate webhooks behind your edge.
+The production PGVector workflow verifies Chatwoot's signed webhook headers against the exact raw request body before any database, AI, or Chatwoot side effect runs. Configure the Agent Bot secret and restrict the accepted account and inbox:
+
+```bash
+CHATWOOT_WEBHOOK_SECRET=<the Agent Bot secret from Chatwoot>
+CHATWOOT_ACCOUNT_ID=2
+CHATWOOT_INBOX_ID=3
+CHATWOOT_WEBHOOK_AUTH_ENFORCED=true
+```
+
+Restart n8n after changing its environment. Keep `CHATWOOT_WEBHOOK_AUTH_ENFORCED=false` only during rollout; compatibility mode accepts unsigned traffic. Strict mode rejects missing, malformed, stale (over five minutes), incorrectly signed, or wrong-account/inbox requests with HTTP 401.
+
+### n8n execution queue and hung-run recovery
+
+The bot's PostgreSQL tables are the durable conversation queue and side-effect ledger. For process-level isolation, `docker-compose.queue.yml` additionally runs n8n in queue mode with Redis, PostgreSQL-backed n8n metadata, and two worker processes by default.
+
+Queue defaults are deliberately aligned with the bot lease:
+
+- Each worker accepts five concurrent executions, so one hung execution doesn't block the main n8n process.
+- Workflow executions stop after 240 seconds, before the bot's 300-second conversation lease expires.
+- AI calls stop after 180 seconds.
+- Redis detects stalled jobs and retries them once. The bot's idempotency/effect ledger prevents retries from repeating completed Chatwoot effects.
+- Redis uses append-only persistence and isn't published to the host network.
+
+The current installation must be migrated from SQLite to PostgreSQL before queue mode can start. Put the existing n8n encryption key and a new strong Redis password in `.env`, then run:
+
+```bash
+./scripts/migrate-n8n-to-queue.sh --preflight
+./scripts/migrate-n8n-to-queue.sh --apply  # run during a maintenance window
+```
+
+The script stops n8n, backs up its data volume, exports all entities, creates the dedicated n8n database, imports the entities, then starts Redis, the main process, and two workers. It restarts the untouched SQLite service if migration fails before queue mode starts. To roll back after a successful migration:
+
+```bash
+docker compose -f docker-compose.queue.yml down
+docker compose up -d n8n
+```
+
+See n8n's [queue-mode documentation](https://docs.n8n.io/hosting/scaling/queue-mode/) and [database migration commands](https://docs.n8n.io/hosting/cli-commands/).
 
 ### Handoff routing
 
@@ -129,7 +168,7 @@ Fast MVP passes the full small FAQ list to the LLM. This is fine while docs are 
 
 | Concern | Where |
 |--------|--------|
-| Idempotency + debounce | Legacy: n8n static data; Postgres bot: `bot_audit_events.dedupe_key` + `last_seen_at` |
+| Idempotency + debounce | `bot_inbound_events`, `bot_conversation_leases`, and `bot_outbound_effects`; two-second quiet-window batching with minute recovery |
 | Repeated failed turns | `FAILED_TURN_THRESHOLD` (legacy tracker; Postgres bot fail-closed on low confidence) |
 | Guided-flow state | Legacy: Chatwoot `n8n_guided_flow`; Postgres bot: `bot_conversation_state.flow_state` |
 | Guided-flow source | `Fetch Guided Flow` Code node; replace later with API HTTP Request |
@@ -200,6 +239,56 @@ Each published FAQ becomes one or more vectors (`helpshift-faq-{id}--{slug}`). H
 5. Point a Chatwoot Agent Bot `outgoing_url` to `{WEBHOOK_URL}webhook/chatwoot-rag-guided-bot`.
 
 Each customer message: embed query → Pinecone top-k → **Flow Planner** JSON (prompt, `input_select` options, tips) → public reply, or handoff when retrieval score is below `RAG_MIN_SCORE` or the planner marks `in_scope: false`.
+
+## PGVector staging RAG
+
+The active `ProGolf Support Bot` should be cloned before testing pgvector. Keep the production workflow untouched and use a staging webhook such as `progolf-support-bot-pgvector-test`.
+
+1. Apply `migrations/002_progolf_pgvector.sql` to the Chatwoot Postgres database.
+2. Create a dedicated Postgres credential in n8n for the Chatwoot DB role, with `search_path` set to `progolf_support, public`.
+3. Preview Helpshift ingestion:
+
+```bash
+npm run rag:upsert-pgvector:dry -- \
+  --faqs /path/to/en_faqs.csv \
+  --sections /path/to/en_sections.csv
+```
+
+4. Upsert into `progolf_support.progolf_faq_vectors`:
+
+```bash
+npm run rag:upsert-pgvector -- \
+  --faqs /path/to/en_faqs.csv \
+  --sections /path/to/en_sections.csv \
+  --prune-stale
+# Full replace: npm run rag:upsert-pgvector -- --recreate
+```
+
+The PGVector table uses n8n-compatible columns (`id`, `text`, `metadata`, `embedding`). Runtime retrieval uses n8n's Postgres PGVector Store node in `retrieve-as-tool` mode, connected to the existing OpenAI embeddings node. Do not switch Chatwoot's Agent Bot webhook to the staging workflow until retrieval and QA behavior have been verified.
+
+### Pinecone to PGVector migration workflow
+
+The manual n8n workflow `ProGolf Pinecone to PGVector Migration` copies the current Pinecone namespace into `progolf_support.progolf_faq_vectors`. It uses Pinecone's REST `vectors/list` and `vectors/fetch` APIs, then upserts into Chatwoot Postgres through the `Chatwoot PGVector Postgres` credential.
+
+Required n8n environment:
+
+```bash
+PINECONE_API_KEY=...
+PINECONE_INDEX=pro-golf-support
+PINECONE_NAMESPACE=progolf_faqs
+PGVECTOR_SCHEMA=progolf_support
+PGVECTOR_TABLE=progolf_faq_vectors
+```
+
+Optional migration controls:
+
+```bash
+PINECONE_INDEX_HOST=        # Optional; workflow resolves from PINECONE_INDEX when empty
+PINECONE_MIGRATION_PREFIX=  # Optional ID prefix filter
+PGVECTOR_MIGRATION_MAX_RECORDS=
+PGVECTOR_MIGRATION_RECREATE=false
+PGVECTOR_MIGRATION_PRUNE_STALE=false
+```
 
 ### Pinecone document metadata (recommended)
 

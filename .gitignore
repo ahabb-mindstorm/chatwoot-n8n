@@ -1,4 +1,5 @@
 .env
 .DS_Store
 n8n_data/
+backups/
 node_modules/

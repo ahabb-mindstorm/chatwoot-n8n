@@ -57,6 +57,7 @@ Queue defaults are deliberately aligned with the bot lease:
 - AI calls stop after 180 seconds.
 - Redis detects stalled jobs and retries them once. The bot's idempotency/effect ledger prevents retries from repeating completed Chatwoot effects.
 - Redis uses append-only persistence and isn't published to the host network.
+- `N8N_SECURE_COOKIE` defaults to `false` in queue mode so the editor works over plain HTTP. Set it to `true` once n8n is behind HTTPS.
 
 The current installation must be migrated from SQLite to PostgreSQL before queue mode can start. Put the existing n8n encryption key and a new strong Redis password in `.env`, then run:
 

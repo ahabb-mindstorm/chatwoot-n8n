@@ -1,6 +1,7 @@
 x-n8n-environment: &n8n-environment
   N8N_HOST: ${N8N_HOST:-0.0.0.0}
   N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+  N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-false}
   WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
   GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
   TZ: ${TZ:-UTC}

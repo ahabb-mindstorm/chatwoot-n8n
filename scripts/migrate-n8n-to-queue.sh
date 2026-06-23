@@ -71,8 +71,10 @@ docker compose stop n8n
 legacy_stopped=true
 
 echo "Backing up the n8n data volume..."
-docker compose run --rm --no-deps -v "$backup_dir:/backup" n8n \
-  sh -c "tar -czf /backup/n8n-data.tgz -C /home/node/.n8n ."
+n8n_container_id="$(docker compose ps -q n8n)"
+[[ -n "$n8n_container_id" ]] || fail "Could not find the stopped n8n container for volume backup"
+docker run --rm --volumes-from "$n8n_container_id" -v "$backup_dir:/backup" alpine:3.20 \
+  tar -czf /backup/n8n-data.tgz -C /home/node/.n8n .
 
 echo "Exporting all n8n entities, including execution history..."
 docker compose run --rm --no-deps -v "$backup_dir:/backup" n8n \

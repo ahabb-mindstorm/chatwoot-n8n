@@ -31,6 +31,8 @@ test("queue migration protects credentials and leaves a rollback path", () => {
   assert.match(migration, /N8N_ENCRYPTION_KEY does not match the current instance/);
   assert.match(migration, /export:entities/);
   assert.match(migration, /import:entities/);
+  assert.match(migration, /docker run --rm --volumes-from "\$n8n_container_id"/);
+  assert.doesNotMatch(migration, /docker compose run --rm --no-deps -v "\$backup_dir:\/backup" n8n \\\n\s+sh -c/);
   assert.match(migration, /Refusing to overwrite it/);
   assert.match(migration, /restarting the untouched SQLite n8n service/);
   assert.match(migration, /--scale n8n-worker=/);

@@ -106,6 +106,9 @@ services:
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
+    networks:
+      - default
+      - chatwoot_default
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +130,9 @@ services:
   n8n-worker:
     image: docker.n8n.io/n8nio/n8n:latest
     command: ["worker", "--concurrency=${N8N_WORKER_CONCURRENCY:-5}"]
+    networks:
+      - default
+      - chatwoot_default
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,3 +151,7 @@ volumes:
   n8n_data:
   postgres_data:
   redis_data:
+
+networks:
+  chatwoot_default:
+    external: true

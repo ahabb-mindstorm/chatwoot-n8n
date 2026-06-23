@@ -15,6 +15,9 @@ test("queue deployment uses Redis, PostgreSQL, and separate workers", () => {
   assert.match(compose, /QUEUE_BULL_REDIS_HOST:\s*redis/);
   assert.match(compose, /redis:\n[\s\S]*redis:7-alpine/);
   assert.match(compose, /n8n-worker:\n[\s\S]*command:\s*\["worker"/);
+  assert.match(compose, /n8n:\n[\s\S]*networks:\n\s+- default\n\s+- chatwoot_default/);
+  assert.match(compose, /n8n-worker:\n[\s\S]*networks:\n\s+- default\n\s+- chatwoot_default/);
+  assert.match(compose, /chatwoot_default:\n\s+external:\s+true/);
   assert.doesNotMatch(compose.slice(compose.indexOf("  redis:"), compose.indexOf("  n8n:")), /ports:/);
   assert.doesNotMatch(compose.slice(compose.indexOf("  n8n-worker:"), compose.indexOf("\nvolumes:")), /n8n_data/);
 });

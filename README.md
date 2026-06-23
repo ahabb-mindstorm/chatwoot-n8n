@@ -31,7 +31,7 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
 5. In n8n, create a **Postgres** credential named `Bot Postgres` (host `postgres`, db/user/password from `.env`) and attach it to all Postgres nodes (`__REPLACE_ME__` placeholders). Configure OpenAI + Pinecone credentials on AI/RAG nodes.
 6. Point Chatwoot Agent Bot **`outgoing_url`** to `{WEBHOOK_URL}webhook/<workflow-path>` (slash rules: trailing slash matters for `WEBHOOK_URL` env).  
 7. Run `bash scripts/setup-agent-bot.sh` **or** create bot in UI and paste the same URL.  
-8. Use `CHATWOOT_API_ACCESS_TOKEN` that can create agent bots, attach inbox bots, and post conversation messages for the account.  
+8. Use `CHATWOOT_API_ACCESS_TOKEN` that can create agent bots, attach inbox bots, update labels/status, and post private/internal messages for the account. Set `CHATWOOT_AGENT_BOT_ACCESS_TOKEN` to the Agent Bot access token so public bot replies are authored by the bot instead of a human agent.  
 
 ### Chatwoot webhook authentication
 
@@ -266,6 +266,43 @@ npm run rag:upsert-pgvector -- \
 ```
 
 The PGVector table uses n8n-compatible columns (`id`, `text`, `metadata`, `embedding`). Runtime retrieval uses n8n's Postgres PGVector Store node in `retrieve-as-tool` mode, connected to the existing OpenAI embeddings node. Do not switch Chatwoot's Agent Bot webhook to the staging workflow until retrieval and QA behavior have been verified.
+
+
+### Chatwoot Help Center to PGVector sync
+
+Workflow: `workflows/progolf-chatwoot-faq-to-pgvector-sync.sdk.js` (`ProGolf Chatwoot FAQ to PGVector Sync`).
+
+Fetches published Help Center articles via the Chatwoot Help Center API, embeds them with OpenAI, deletes stale `metadata.source = "chatwoot"` vectors, and upserts into `progolf_support.progolf_faq_vectors`. Generated support playbooks in the same table are preserved.
+
+Regenerate the SDK workflow after editing `scripts/generate-chatwoot-pgvector-sync-workflow.mjs`, `scripts/n8n-templates/fetch-chatwoot-articles.js`, or `scripts/lib/chatwoot-article-chunks.mjs`:
+
+```bash
+npm run workflow:generate-chatwoot-pgvector-sync
+npm run workflow:deploy-chatwoot-pgvector-sync-via-mcp
+```
+
+CLI equivalent:
+
+```bash
+npm run rag:upsert-chatwoot-pgvector:dry
+npm run rag:upsert-chatwoot-pgvector
+# Optional portal filter in .env: CHATWOOT_PORTAL_SLUG=withdrawl
+```
+
+Required n8n environment:
+
+```bash
+CHATWOOT_BASE_URL=https://chat.example.com
+CHATWOOT_API_ACCESS_TOKEN=...
+CHATWOOT_ACCOUNT_ID=1
+CHATWOOT_PORTAL_SLUG=withdrawl   # optional; empty = all portals for the account
+OPENAI_API_KEY=...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+PGVECTOR_SCHEMA=progolf_support
+PGVECTOR_TABLE=progolf_faq_vectors
+PGVECTOR_SYNC_DRY_RUN=false
+PGVECTOR_SYNC_PRUNE_STALE=true
+```
 
 ### Pinecone to PGVector migration workflow
 

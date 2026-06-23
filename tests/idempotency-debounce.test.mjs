@@ -183,6 +183,16 @@ test("outgoing messages carry deterministic reconciliation keys", () => {
   }
 });
 
+test("public Chatwoot messages use the agent bot token when configured", () => {
+  const botToken = /CHATWOOT_AGENT_BOT_ACCESS_TOKEN \|\| \$env\.CHATWOOT_API_ACCESS_TOKEN/;
+  for (const name of ["Send Reply", "Send Escalation Form", "Notify Player"]) {
+    assert.match(node(name).parameters.headerParameters.parameters[0].value, botToken, name);
+  }
+  for (const name of ["Save Escalation Context", "Post Internal Note", "Label Conversation", "Open Conversation"]) {
+    assert.equal(node(name).parameters.headerParameters.parameters[0].value, "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}", name);
+  }
+});
+
 test("typing and effect guards restore the durable context they replace", () => {
   assert.deepEqual(targets("Typing On"), ["Restore Debounced Context"]);
   assert.deepEqual(targets("Typing Indicators Enabled?", 1), ["Restore Debounced Context"]);

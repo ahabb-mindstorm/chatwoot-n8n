@@ -12,6 +12,7 @@ test("queue deployment uses Redis, PostgreSQL, and separate workers", () => {
   assert.match(compose, /EXECUTIONS_MODE:\s*queue/);
   assert.match(compose, /DB_TYPE:\s*postgresdb/);
   assert.match(compose, /N8N_SECURE_COOKIE:\s*\$\{N8N_SECURE_COOKIE:-false\}/);
+  assert.match(compose, /CHATWOOT_AGENT_BOT_ACCESS_TOKEN:\s*\$\{CHATWOOT_AGENT_BOT_ACCESS_TOKEN:-\}/);
   assert.match(compose, /QUEUE_BULL_REDIS_HOST:\s*redis/);
   assert.match(compose, /redis:\n[\s\S]*redis:7-alpine/);
   assert.match(compose, /n8n-worker:\n[\s\S]*command:\s*\["worker"/);

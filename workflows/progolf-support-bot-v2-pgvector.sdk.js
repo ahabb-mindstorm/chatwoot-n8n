@@ -367,7 +367,7 @@ const sendReply = node({
         "parameters": [
           {
             "name": "api_access_token",
-            "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            "value": "={{ $env.CHATWOOT_AGENT_BOT_ACCESS_TOKEN || $env.CHATWOOT_API_ACCESS_TOKEN }}"
           }
         ]
       },
@@ -670,7 +670,7 @@ const sendEscalationForm = node({
         "parameters": [
           {
             "name": "api_access_token",
-            "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            "value": "={{ $env.CHATWOOT_AGENT_BOT_ACCESS_TOKEN || $env.CHATWOOT_API_ACCESS_TOKEN }}"
           }
         ]
       },
@@ -780,7 +780,7 @@ const notifyPlayer = node({
         "parameters": [
           {
             "name": "api_access_token",
-            "value": "={{ $env.CHATWOOT_API_ACCESS_TOKEN }}"
+            "value": "={{ $env.CHATWOOT_AGENT_BOT_ACCESS_TOKEN || $env.CHATWOOT_API_ACCESS_TOKEN }}"
           }
         ]
       },

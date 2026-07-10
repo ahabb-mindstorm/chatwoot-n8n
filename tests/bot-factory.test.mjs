@@ -531,6 +531,9 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.ok(runtimeBody);
   assert.ok(!ingressBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Invoke Support Runtime'));
+  assert.ok(ingressBody.nodes.some((node) => node.name === 'Respond Authorized'));
+  assert.ok(ingressBody.nodes.some((node) => node.name === 'Ingest Durable Event'));
+  assert.ok(!ingressBody.nodes.some((node) => node.name === 'Recover Next Batch'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
   const invoke = ingressBody.nodes.find((node) => node.name === 'Invoke Support Runtime');

@@ -93,6 +93,16 @@ const SHARED_RUNTIME_DROP = new Set([
   'Cleanup Idempotency Records',
 ]);
 
+/** Schedules/recovery only — ingress must keep verify/ingest/respond nodes. */
+const INGRESS_SCHEDULE_DROP = new Set([
+  'Recovery Schedule',
+  'Load Recovery Switch',
+  'Recovery Enabled?',
+  'Recover Next Batch',
+  'Cleanup Schedule',
+  'Cleanup Idempotency Records',
+]);
+
 export function supportRuntimeWorkflowName(revision = RUNTIME_REVISION) {
   return `Helio Support Runtime (${revision})`;
 }
@@ -120,8 +130,7 @@ export function renderIngressWorkflow(template, spec, options) {
   };
 
   workflow.nodes = workflow.nodes.filter((node) => !AGENT_NODE_NAMES.has(node.name));
-  // Ingress is verify/enqueue/invoke only — drop schedules and agent-side recovery.
-  workflow.nodes = workflow.nodes.filter((node) => !SHARED_RUNTIME_DROP.has(node.name));
+  workflow.nodes = workflow.nodes.filter((node) => !INGRESS_SCHEDULE_DROP.has(node.name));
   pruneConnections(workflow);
 
   const configUrl =

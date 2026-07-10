@@ -133,15 +133,22 @@ export function renderIngressWorkflow(template, spec, options) {
   workflow.nodes = workflow.nodes.filter((node) => !INGRESS_SCHEDULE_DROP.has(node.name));
   pruneConnections(workflow);
 
-  const configUrl =
-    spec.bot.configUrl || `/api/v1/accounts/${spec.accountId}/agent-bots/${spec.bot.id}/config`;
+  const helioBaseUrl =
+    spec.helioBaseUrl ||
+    process.env.HELIO_BASE_URL ||
+    process.env.CHATWOOT_BASE_URL ||
+    'http://host.docker.internal:3000';
+  const configUrl = absoluteUrl(
+    helioBaseUrl,
+    spec.bot.configUrl || `/api/v1/accounts/${spec.accountId}/agent-bots/${spec.bot.id}/config`,
+  );
   const invokeNode = {
     parameters: {
       method: 'POST',
       url: options.supportRuntimeWebhookUrl,
       sendBody: true,
       specifyBody: 'json',
-      jsonBody: `={{ JSON.stringify({ agentBotId: ${spec.bot.id}, accountId: ${spec.accountId}, inboxId: ${spec.inboxId}, gameId: ${JSON.stringify(spec.gameId)}, accessToken: ${JSON.stringify(spec.bot.accessToken)}, webhookSecret: ${JSON.stringify(spec.bot.webhookSecret)}, helioBaseUrl: ${JSON.stringify(spec.helioBaseUrl || '')}, configUrl: ${JSON.stringify(configUrl)}, ragTableName: ${JSON.stringify(ragTableName(spec))}, memoryTableName: ${JSON.stringify(memoryTableName(spec))}, memorySessionPrefix: ${JSON.stringify(memorySessionPrefix(spec))}, systemMessage: ${JSON.stringify(spec.systemMessage || '')}, claimedBatch: $json }) }}`,
+      jsonBody: `={{ JSON.stringify({ agentBotId: ${spec.bot.id}, accountId: ${spec.accountId}, inboxId: ${spec.inboxId}, gameId: ${JSON.stringify(spec.gameId)}, accessToken: ${JSON.stringify(spec.bot.accessToken)}, webhookSecret: ${JSON.stringify(spec.bot.webhookSecret)}, helioBaseUrl: ${JSON.stringify(helioBaseUrl)}, configUrl: ${JSON.stringify(configUrl)}, ragTableName: ${JSON.stringify(ragTableName(spec))}, memoryTableName: ${JSON.stringify(memoryTableName(spec))}, memorySessionPrefix: ${JSON.stringify(memorySessionPrefix(spec))}, systemMessage: ${JSON.stringify(spec.systemMessage || '')}, claimedBatch: $json }) }}`,
       options: { timeout: 120000 },
     },
     id: deterministicId(`ingress-invoke-${spec.bot.id}`, 'http'),
@@ -152,9 +159,9 @@ export function renderIngressWorkflow(template, spec, options) {
   };
   workflow.nodes.push(invokeNode);
 
-  if (workflow.connections['Restore Debounced Context']?.main?.[0]?.[0]) {
-    workflow.connections['Restore Debounced Context'].main[0][0].node = 'Invoke Support Runtime';
-  }
+  workflow.connections['Restore Debounced Context'] = {
+    main: [[{ node: 'Invoke Support Runtime', type: 'main', index: 0 }]],
+  };
   workflow.connections['Invoke Support Runtime'] = { main: [[]] };
 
   sanitizeProGolfVocabulary(workflow);
@@ -174,6 +181,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
 
   workflow.nodes = workflow.nodes.filter((node) => !SHARED_RUNTIME_DROP.has(node.name));
   pruneConnections(workflow);
+  rewireSharedRuntimeAfterTypingDrop(workflow);
 
   const path = supportRuntimeWebhookPath(revision);
   const webhook = workflow.nodes.find((node) => node.name === 'Chatwoot Bot Events');
@@ -208,6 +216,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
   patchRuntimeSupportAgent(workflow);
   patchRuntimeFaqAndMemory(workflow);
   patchRuntimeTaxonomyNodes(workflow);
+  patchRuntimeOutboundReferences(workflow);
   sanitizeProGolfVocabulary(workflow);
 
   workflow.connections['Accept Runtime Payload'] = {
@@ -266,10 +275,20 @@ const ttlMs = 30 * 1000;
 const runtimeContract = ${JSON.stringify(runtimeContract)};
 let cached = staticData[cacheKey];
 
+function resolveConfigUrl() {
+  const url = String(runtime.configUrl || '').trim();
+  if (/^https?:\\/\\//i.test(url)) return url;
+  const base = String(runtime.helioBaseUrl || '').replace(/\\/$/, '');
+  if (!base) {
+    throw new Error('helioBaseUrl or absolute configUrl is required to load bot config');
+  }
+  return base + '/' + url.replace(/^\\//, '');
+}
+
 async function loadConfig() {
   const response = await this.helpers.httpRequest({
     method: 'GET',
-    url: runtime.configUrl,
+    url: resolveConfigUrl(),
     headers: { 'api-access-token': runtime.accessToken },
     json: true,
     timeout: 8000,
@@ -391,6 +410,52 @@ function patchRuntimeTaxonomyNodes(workflow) {
   }
 }
 
+/** Replace ingress-only node/$env refs with Accept Runtime Payload / helioRuntime. */
+function patchRuntimeOutboundReferences(workflow) {
+  const replacements = [
+    ["$('Normalize Claimed Batch')", "$('Accept Runtime Payload')"],
+    ['$("Normalize Claimed Batch")', '$("Accept Runtime Payload")'],
+    [
+      '$env.CHATWOOT_BASE_URL',
+      "$('Accept Runtime Payload').first().json.helioRuntime.helioBaseUrl",
+    ],
+    [
+      '$env.CHATWOOT_AGENT_BOT_ACCESS_TOKEN',
+      "$('Accept Runtime Payload').first().json.helioRuntime.accessToken",
+    ],
+    [
+      '$env.CHATWOOT_API_ACCESS_TOKEN',
+      "$('Accept Runtime Payload').first().json.helioRuntime.accessToken",
+    ],
+    [
+      '$env.CHATWOOT_WEBHOOK_SECRET',
+      "$('Accept Runtime Payload').first().json.helioRuntime.webhookSecret",
+    ],
+  ];
+
+  const patchValue = (value) => {
+    if (typeof value === 'string') {
+      let next = value;
+      for (const [from, to] of replacements) {
+        if (next.includes(from)) next = next.split(from).join(to);
+      }
+      return next;
+    }
+    if (Array.isArray(value)) return value.map(patchValue);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, child]) => [key, patchValue(child)]),
+      );
+    }
+    return value;
+  };
+
+  workflow.nodes = workflow.nodes.map((node) => ({
+    ...node,
+    parameters: patchValue(node.parameters || {}),
+  }));
+}
+
 function policyDrivenNormalizeEscalationJs() {
   return `function getEventContext() {
   try { return $('Accept Runtime Payload').first().json || {}; } catch (e) {}
@@ -509,6 +574,30 @@ function pruneConnections(workflow) {
   workflow.connections = next;
 }
 
+/**
+ * Typing-off nodes are ingress-only. After they are dropped from the shared runtime,
+ * rewire their former sources to the claim/send nodes they used to feed.
+ */
+function rewireSharedRuntimeAfterTypingDrop(workflow) {
+  const names = new Set(workflow.nodes.map((node) => node.name));
+  const edge = (node) => ({ node, type: 'main', index: 0 });
+
+  function setOutput(from, outputIndex, toNode) {
+    if (!names.has(from) || !names.has(toNode)) return;
+    if (!workflow.connections[from]) workflow.connections[from] = { main: [] };
+    if (!Array.isArray(workflow.connections[from].main)) workflow.connections[from].main = [];
+    while (workflow.connections[from].main.length <= outputIndex) {
+      workflow.connections[from].main.push([]);
+    }
+    workflow.connections[from].main[outputIndex] = [edge(toNode)];
+  }
+
+  setOutput('Route Requirement Lookup', 0, 'Claim Send Reply');
+  setOutput('Route Saved Escalation', 0, 'Claim Send Escalation Form');
+  setOutput('Run Label Conversation?', 1, 'Claim Notify Player');
+  setOutput('Complete Label Conversation', 0, 'Claim Notify Player');
+}
+
 function cloneWithoutN8nIdentity(template) {
   const clone = JSON.parse(JSON.stringify(template));
   delete clone.id;
@@ -549,6 +638,11 @@ function memorySessionPrefix(spec) {
 
 function webhookUrl(baseUrl, path) {
   return `${String(baseUrl || '').replace(/\/$/, '')}/webhook/${path}`;
+}
+
+function absoluteUrl(baseUrl, path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${String(baseUrl || '').replace(/\/$/, '')}/${String(path).replace(/^\//, '')}`;
 }
 
 function deterministicId(path, suffix) {

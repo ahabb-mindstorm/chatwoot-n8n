@@ -379,6 +379,7 @@ test('agent-bot scoped recovery migration filters recover by agent_bot_id', () =
   assert.match(migration, /p_agent_bot_id BIGINT DEFAULT NULL/);
   assert.match(migration, /l\.agent_bot_id IS NOT DISTINCT FROM p_agent_bot_id/);
   assert.match(migration, /bot_ingest_event\(/);
+  assert.match(migration, /DROP FUNCTION IF EXISTS bot_recover_next_batch\(text, integer, integer\)/);
 });
 
 test('Space Quest provision render has no ProGolf vocabulary in patched surfaces', () => {
@@ -534,10 +535,36 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Respond Authorized'));
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Ingest Durable Event'));
   assert.ok(!ingressBody.nodes.some((node) => node.name === 'Recover Next Batch'));
+  assert.deepEqual(ingressBody.connections['Restore Debounced Context'], {
+    main: [[{ node: 'Invoke Support Runtime', type: 'main', index: 0 }]],
+  });
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
+  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Claim Send Reply'));
+  assert.deepEqual(runtimeBody.connections['Route Requirement Lookup']?.main?.[0], [
+    { node: 'Claim Send Reply', type: 'main', index: 0 },
+  ]);
+  assert.deepEqual(runtimeBody.connections['Route Saved Escalation']?.main?.[0], [
+    { node: 'Claim Send Escalation Form', type: 'main', index: 0 },
+  ]);
+  const sendReply = runtimeBody.nodes.find((node) => node.name === 'Send Reply');
+  assert.match(
+    JSON.stringify(sendReply?.parameters || {}),
+    /Accept Runtime Payload.*helioRuntime\.accessToken|helioRuntime\.accessToken.*Accept Runtime Payload/,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(sendReply?.parameters || {}),
+    /Normalize Claimed Batch|CHATWOOT_AGENT_BOT_ACCESS_TOKEN/,
+  );
+  const claimSend = runtimeBody.nodes.find((node) => node.name === 'Claim Send Reply');
+  assert.match(JSON.stringify(claimSend?.parameters || {}), /Accept Runtime Payload/);
+  assert.doesNotMatch(JSON.stringify(claimSend?.parameters || {}), /Normalize Claimed Batch/);
   const invoke = ingressBody.nodes.find((node) => node.name === 'Invoke Support Runtime');
   assert.match(String(invoke.parameters.url), /n8n-internal\.test\/webhook\/helio-support-runtime/);
+  assert.match(
+    String(invoke.parameters.jsonBody),
+    /https:\/\/helio\.example\.test\/api\/v1\/accounts\/42\/agent-bots\/55\/config/,
+  );
   assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
   assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
 

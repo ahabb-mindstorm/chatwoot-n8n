@@ -17,6 +17,10 @@ CREATE INDEX IF NOT EXISTS bot_inbound_events_agent_bot_queue_idx
 CREATE INDEX IF NOT EXISTS bot_conversation_leases_agent_bot_ready_idx
   ON bot_conversation_leases (agent_bot_id, quiet_until, lease_until);
 
+-- Replace the 3-arg overload with a single 4-arg function (default NULL = global).
+-- Leaving both signatures makes Postgres reject 3-arg calls as "not unique".
+DROP FUNCTION IF EXISTS bot_recover_next_batch(text, integer, integer);
+
 CREATE OR REPLACE FUNCTION bot_ingest_event(
   p_account_id BIGINT,
   p_conversation_id BIGINT,

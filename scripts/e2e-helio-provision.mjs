@@ -179,13 +179,17 @@ async function waitForBotReply(conversationId, afterMessageId, timeoutMs = 45000
          FROM messages WHERE conversation_id = $1 AND id > $2 ORDER BY id`,
         [conversationId, afterMessageId],
       );
-      if (result.rows.some((row) => row.message_type === 1)) return result.rows;
+      if (result.rows.some((row) => isOutgoingBotMessage(row.message_type))) return result.rows;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
     return [];
   } finally {
     await client.end();
   }
+}
+
+function isOutgoingBotMessage(messageType) {
+  return messageType === 1 || messageType === '1' || messageType === 'outgoing';
 }
 
 async function findExistingBotId() {
@@ -395,7 +399,7 @@ async function main() {
   );
   const sentMessage = await msgResponse.json();
   const replies = await waitForBotReply(conversation.id, sentMessage.id, 60000);
-  const botReply = replies.find((row) => row.message_type === 1);
+  const botReply = replies.find((row) => isOutgoingBotMessage(row.message_type));
   record(
     'Widget hello gets bot reply',
     Boolean(botReply?.content),

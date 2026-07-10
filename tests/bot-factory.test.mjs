@@ -60,6 +60,8 @@ function headersWithSecret(secret, { bearer = true } = {}) {
 function createFakeFetch({
   mainId = 'wf-main-1',
   faqSyncId = 'wf-faq-1',
+  ingressId = 'wf-ingress-1',
+  runtimeId = 'wf-runtime-1',
   existingWorkflows = [],
 } = {}) {
   const calls = [];
@@ -109,7 +111,11 @@ function createFakeFetch({
     }
 
     if (method === 'POST' && path === '/api/v1/workflows') {
-      const id = body?.name?.includes('FAQ Sync') ? faqSyncId : mainId;
+      const name = String(body?.name || '');
+      let id = mainId;
+      if (name.includes('FAQ Sync')) id = faqSyncId;
+      else if (/Support Runtime/i.test(name)) id = runtimeId;
+      else if (/Ingress/i.test(name)) id = ingressId;
       workflows.set(id, {
         id,
         name: body.name,
@@ -265,7 +271,7 @@ test('renderMainWorkflow patches webhook path, name, meta, system message, and b
   assert.doesNotMatch(supportAgent.parameters.options.systemMessage, /Pro Caddy/);
   assert.equal(loadConfig.type, 'n8n-nodes-base.code');
   assert.match(loadConfig.parameters.jsCode, /Support Funnel|runtimeContract|Game instructions/);
-  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-bridge-1/);
+  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v1/);
   assert.match(loadConfig.parameters.jsCode, /api-access-token/);
   assert.match(loadConfig.parameters.jsCode, /configVersion/);
   assert.equal(
@@ -465,11 +471,73 @@ test('renderMainWorkflow patches FAQ vector store to the same per-bot bot_rag ta
 });
 
 
-test('provisionBotWorkflows creates and activates only the main bot workflow via fake n8n REST', async () => {
-  const spec = validSpec();
+test('provisionBotWorkflows creates ingress and ensures shared support runtime', async () => {
+  const spec = validSpec({
+    gameId: 'space_quest',
+    portalSlug: 'space-quest-help',
+    systemMessage: 'You are the Space Quest support bot.',
+    bot: { id: 55, accessToken: 'space-token', webhookSecret: 'space-secret' },
+  });
   const { fetchImpl, calls } = createFakeFetch({
-    mainId: 'main-workflow-id',
-    faqSyncId: 'faq-sync-workflow-id',
+    mainId: 'should-not-use-main',
+    ingressId: 'ingress-workflow-id',
+    runtimeId: 'runtime-workflow-id',
+  });
+
+  const result = await provisionBotWorkflows(spec, {
+    fetchImpl,
+    env: {
+      N8N_API_KEY: 'test-n8n-api-key',
+      N8N_BASE_URL: 'http://n8n-internal.test',
+      WEBHOOK_URL: 'https://public-n8n.example.test',
+      BOT_FACTORY_API_SECRET: 'factory-secret',
+    },
+    mainTemplate: loadMainTemplate(),
+  });
+
+  const createCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/v1/workflows');
+  const names = createCalls.map((call) => call.body.name);
+  assert.ok(names.some((name) => /Ingress/i.test(name)), `expected ingress in ${names.join(', ')}`);
+  assert.ok(
+    names.some((name) => /Support Runtime/i.test(name)),
+    `expected support runtime in ${names.join(', ')}`,
+  );
+  assert.ok(!names.some((name) => /ProGolf|Support Bot - account/i.test(name)));
+
+  const ingressBody = createCalls.find((call) => /Ingress/i.test(call.body.name))?.body;
+  const runtimeBody = createCalls.find((call) => /Support Runtime/i.test(call.body.name))?.body;
+  assert.ok(ingressBody);
+  assert.ok(runtimeBody);
+  assert.ok(!ingressBody.nodes.some((node) => node.name === 'Support Agent'));
+  assert.ok(ingressBody.nodes.some((node) => node.name === 'Invoke Support Runtime'));
+  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
+  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
+  assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
+  assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
+
+  assert.equal(result.runtimeRevision, 'helio-support-runtime-v1');
+  assert.equal(
+    result.webhookUrl,
+    'https://public-n8n.example.test/webhook/helio-space-quest-42-7-55-bot',
+  );
+  assert.equal(result.workflowIds.ingress, 'ingress-workflow-id');
+  assert.equal(result.workflowIds.supportRuntime, 'runtime-workflow-id');
+  assert.equal(result.ingressWorkflowId, 'ingress-workflow-id');
+  assert.equal(result.supportRuntimeWorkflowId, 'runtime-workflow-id');
+  assert.equal(result.mainWorkflowId, 'ingress-workflow-id');
+});
+
+test('provisionBotWorkflows upserts existing ingress by deterministic name', async () => {
+  const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
+  const existingName = `Helio space_quest Ingress - account 42 inbox 7`;
+  const runtimeName = `Helio Support Runtime (helio-support-runtime-v1)`;
+  const { fetchImpl, calls } = createFakeFetch({
+    ingressId: 'existing-ingress',
+    runtimeId: 'existing-runtime',
+    existingWorkflows: [
+      { id: 'existing-ingress', name: existingName, active: true },
+      { id: 'existing-runtime', name: runtimeName, active: true },
+    ],
   });
 
   const result = await provisionBotWorkflows(spec, {
@@ -484,30 +552,10 @@ test('provisionBotWorkflows creates and activates only the main bot workflow via
 
   const createCalls = calls.filter((call) => call.method === 'POST' && call.path === '/api/v1/workflows');
   const updateCalls = calls.filter((call) => call.method === 'PUT' && call.path.startsWith('/api/v1/workflows/'));
-  const activateCalls = calls.filter((call) => call.method === 'POST' && call.path.endsWith('/activate'));
-
-  assert.equal(createCalls.length, 1);
-  assert.equal(updateCalls.length, 0);
-  assert.equal(activateCalls.length, 1);
-
-  const mainCreate = createCalls[0];
-  assert.equal(mainCreate.body.name, 'Helio progolf Support Bot - account 42 inbox 7');
-
-  assert.deepEqual(
-    activateCalls.map((call) => call.path).sort(),
-    ['/api/v1/workflows/main-workflow-id/activate'],
-  );
-
-  assert.equal(
-    result.webhookUrl,
-    'https://public-n8n.example.test/webhook/helio-progolf-42-7-99-bot',
-  );
-  assert.equal(result.ragTableName, 'bot_rag.faq_progolf_42_7_99');
-  assert.deepEqual(result.workflowIds, {
-    main: 'main-workflow-id',
-  });
-  assert.equal(result.mainWorkflowId, 'main-workflow-id');
-  assert.deepEqual(result.upserted, { main: false });
+  assert.equal(createCalls.length, 0);
+  assert.ok(updateCalls.length >= 1);
+  assert.equal(result.ingressWorkflowId, 'existing-ingress');
+  assert.equal(result.supportRuntimeWorkflowId, 'existing-runtime');
 });
 
 test('getGameTemplate returns progolf starter config with taxonomies and escalation forms', () => {
@@ -595,14 +643,20 @@ test('server exposes authenticated game template catalog endpoints', async () =>
 });
 
 test('provisionBotWorkflows upserts existing workflows by deterministic name', async () => {
-  const spec = validSpec();
+  const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
   const { fetchImpl, calls } = createFakeFetch({
-    mainId: 'main-workflow-id',
-    faqSyncId: 'faq-sync-workflow-id',
+    ingressId: 'ingress-workflow-id',
+    runtimeId: 'runtime-workflow-id',
     existingWorkflows: [
       {
-        id: 'main-workflow-id',
-        name: 'Helio progolf Support Bot - account 42 inbox 7',
+        id: 'ingress-workflow-id',
+        name: 'Helio space_quest Ingress - account 42 inbox 7',
+        active: true,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+      },
+      {
+        id: 'runtime-workflow-id',
+        name: 'Helio Support Runtime (helio-support-runtime-v1)',
         active: true,
         updatedAt: '2026-06-01T00:00:00.000Z',
       },
@@ -623,11 +677,10 @@ test('provisionBotWorkflows upserts existing workflows by deterministic name', a
   const updateCalls = calls.filter((call) => call.method === 'PUT' && call.path.startsWith('/api/v1/workflows/'));
 
   assert.equal(createCalls.length, 0);
-  assert.equal(updateCalls.length, 1);
-  assert.deepEqual(result.workflowIds, {
-    main: 'main-workflow-id',
-  });
-  assert.deepEqual(result.upserted, { main: true });
+  assert.ok(updateCalls.length >= 1);
+  assert.equal(result.workflowIds.ingress, 'ingress-workflow-id');
+  assert.equal(result.workflowIds.supportRuntime, 'runtime-workflow-id');
+  assert.equal(result.upserted.ingress, true);
 });
 
 test('upsertAndActivateWorkflow deactivates duplicate workflows with the same name', async () => {
@@ -781,7 +834,10 @@ test('server accepts a Helio-style provision request and returns usable webhook 
       for await (const chunk of request) raw += chunk;
       const body = JSON.parse(raw);
       createdNames.push(body.name);
-      const id = body.name.includes('FAQ Sync') ? 'faq-id' : 'main-id';
+      let id = 'main-id';
+      if (body.name.includes('FAQ Sync')) id = 'faq-id';
+      else if (/Support Runtime/i.test(body.name)) id = 'runtime-id';
+      else if (/Ingress/i.test(body.name)) id = 'ingress-id';
       response.writeHead(201, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ id }));
       return;
@@ -820,9 +876,15 @@ test('server accepts a Helio-style provision request and returns usable webhook 
     assert.equal(response.status, 201);
     assert.equal(body.webhookUrl, 'https://public-n8n.example.test/webhook/helio-progolf-42-7-99-bot');
     assert.equal(body.ragTableName, 'bot_rag.faq_progolf_42_7_99');
-    assert.deepEqual(body.workflowIds, { main: 'main-id' });
+    assert.equal(body.runtimeRevision, 'helio-support-runtime-v1');
+    assert.deepEqual(body.workflowIds, {
+      ingress: 'ingress-id',
+      supportRuntime: 'runtime-id',
+      main: 'ingress-id',
+    });
     assert.deepEqual(createdNames.sort(), [
-      'Helio progolf Support Bot - account 42 inbox 7',
+      'Helio Support Runtime (helio-support-runtime-v1)',
+      'Helio progolf Ingress - account 42 inbox 7',
     ]);
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {

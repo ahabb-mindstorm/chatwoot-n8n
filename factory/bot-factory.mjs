@@ -15,6 +15,14 @@ import {
 import {
   resolveProvisionTaxonomy,
 } from './game-templates.mjs';
+import {
+  RUNTIME_REVISION,
+  ingressWorkflowName,
+  renderIngressWorkflow,
+  renderSharedSupportRuntime,
+  supportRuntimeWebhookPath,
+  supportRuntimeWorkflowName,
+} from './support-runtime.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MAIN_TEMPLATE_PATH = join(
@@ -26,8 +34,7 @@ const MAIN_TEMPLATE_PATH = join(
 const DEFAULT_N8N_BASE_URL = 'http://localhost:5678';
 export const SHARED_FAQ_SYNC_WORKFLOW_NAME = 'Helio FAQ Sync';
 export const SHARED_FAQ_SYNC_WEBHOOK_PATH = 'helio-faq-sync';
-/** Bridge runtime pin until the clean ingress + shared support runtime ships. */
-export const RUNTIME_REVISION = 'helio-support-runtime-bridge-1';
+export { RUNTIME_REVISION };
 
 let cachedRuntimeContract;
 
@@ -107,31 +114,74 @@ export async function provisionBotWorkflows(rawSpec, options = {}) {
 
   const n8n = n8nConfig(env);
   const webhookBaseUrl = publicWebhookBaseUrl(env, n8n.baseUrl);
-  const mainPath = workflowPath('helio', spec.gameId, spec.accountId, spec.inboxId, spec.bot.id, 'bot');
+  const ingressPath = workflowPath('helio', spec.gameId, spec.accountId, spec.inboxId, spec.bot.id, 'bot');
   const tableName = ragTableName(spec);
 
-  const renderedMain = renderMainWorkflow(mainTemplate, spec, {
-    webhookPath: mainPath,
+  const sharedRuntime = await ensureSharedSupportRuntime({
+    env,
+    fetchImpl,
+    mainTemplate,
     webhookBaseUrl,
   });
 
-  const mainWorkflow = await upsertAndActivateWorkflow(renderedMain, n8n, fetchImpl);
+  const ingress = renderIngressWorkflow(mainTemplate, spec, {
+    webhookPath: ingressPath,
+    webhookBaseUrl,
+    supportRuntimeWebhookUrl: sharedRuntime.webhookUrl,
+  });
+  patchWebhookNode(ingress, 'Chatwoot Bot Events', ingressPath, webhookBaseUrl);
+  replaceEnvReferences(ingress, spec);
+  patchBotTokenHeaders(ingress);
+  patchExecutionTags(ingress);
+  patchRecoveryScope(ingress, spec);
+  patchIngestAgentBotId(ingress, spec);
+
+  const ingressWorkflow = await upsertAndActivateWorkflow(ingress, n8n, fetchImpl);
 
   return {
-    webhookUrl: webhookUrl(webhookBaseUrl, mainPath),
-    mainWebhookUrl: webhookUrl(webhookBaseUrl, mainPath),
+    webhookUrl: webhookUrl(webhookBaseUrl, ingressPath),
+    mainWebhookUrl: webhookUrl(webhookBaseUrl, ingressPath),
     ragTableName: tableName,
     runtimeRevision: RUNTIME_REVISION,
+    supportRuntimeWebhookUrl: sharedRuntime.webhookUrl,
     workflowIds: {
-      main: mainWorkflow.id,
+      ingress: ingressWorkflow.id,
+      supportRuntime: sharedRuntime.workflowId,
+      main: ingressWorkflow.id,
     },
-    mainWorkflowId: mainWorkflow.id,
+    ingressWorkflowId: ingressWorkflow.id,
+    supportRuntimeWorkflowId: sharedRuntime.workflowId,
+    mainWorkflowId: ingressWorkflow.id,
     workflowNames: {
-      main: renderedMain.name,
+      ingress: ingress.name,
+      supportRuntime: sharedRuntime.workflowName,
+      main: ingress.name,
     },
     upserted: {
-      main: mainWorkflow.upserted,
+      ingress: ingressWorkflow.upserted,
+      supportRuntime: sharedRuntime.upserted,
+      main: ingressWorkflow.upserted,
     },
+  };
+}
+
+export async function ensureSharedSupportRuntime(options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const n8n = n8nConfig(env);
+  const webhookBaseUrl = options.webhookBaseUrl || publicWebhookBaseUrl(env, n8n.baseUrl);
+  const mainTemplate = options.mainTemplate || (await loadMainTemplate());
+  const rendered = renderSharedSupportRuntime(mainTemplate, {
+    webhookBaseUrl,
+    revision: RUNTIME_REVISION,
+  });
+  const workflow = await upsertAndActivateWorkflow(rendered, n8n, fetchImpl);
+  return {
+    workflowId: workflow.id,
+    webhookUrl: webhookUrl(webhookBaseUrl, supportRuntimeWebhookPath(RUNTIME_REVISION)),
+    workflowName: rendered.name,
+    upserted: workflow.upserted,
+    runtimeRevision: RUNTIME_REVISION,
   };
 }
 
@@ -290,7 +340,7 @@ async function deactivateWorkflowById(workflowId, n8n, fetchImpl) {
 async function resolveDeprovisionTargets(spec, n8n, fetchImpl) {
   const byId = new Map();
 
-  for (const id of [spec.mainWorkflowId, spec.faqSyncWorkflowId]) {
+  for (const id of [spec.mainWorkflowId, spec.ingressWorkflowId, spec.faqSyncWorkflowId]) {
     if (!id) continue;
     const workflow = await getWorkflowById(id, n8n, fetchImpl);
     byId.set(workflow.id, workflow);
@@ -367,12 +417,15 @@ function pickWorkflowForUpsert(matches) {
 
 export function workflowNamesForSpec(spec) {
   return [
+    ingressWorkflowName(spec),
     `Helio ${spec.gameId} Support Bot - account ${spec.accountId} inbox ${spec.inboxId}`,
   ];
 }
 
 function workflowKindFromName(name) {
   if (name.includes('FAQ Sync')) return 'faqSync';
+  if (name.includes('Support Runtime')) return 'supportRuntime';
+  if (name.includes('Ingress')) return 'ingress';
   if (name.includes('Support Bot')) return 'main';
   return null;
 }

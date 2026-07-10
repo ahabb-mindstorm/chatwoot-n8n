@@ -6,6 +6,7 @@ import {
   authenticateFactoryRequest,
   deprovisionBotWorkflows,
   ensureSharedFaqSyncWorkflow,
+  ensureSharedSupportRuntime,
   provisionBotWorkflows,
 } from './bot-factory.mjs';
 import { getGameTemplate, listGameTemplateIds } from './game-templates.mjs';
@@ -75,6 +76,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       );
     } catch (error) {
       console.error('Failed to ensure shared FAQ sync workflow on startup', error);
+    }
+    try {
+      const sharedRuntime = await ensureSharedSupportRuntime();
+      console.log(
+        `Shared support runtime ready at ${sharedRuntime.webhookUrl} (id=${sharedRuntime.workflowId}, revision=${sharedRuntime.runtimeRevision})`,
+      );
+    } catch (error) {
+      console.error('Failed to ensure shared support runtime on startup', error);
     }
   });
 }

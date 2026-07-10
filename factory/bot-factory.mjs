@@ -114,8 +114,10 @@ export async function provisionBotWorkflows(rawSpec, options = {}) {
 
   const n8n = n8nConfig(env);
   const webhookBaseUrl = publicWebhookBaseUrl(env, n8n.baseUrl);
+  const internalWebhookBaseUrl = internalWebhookBaseUrlFromEnv(env, webhookBaseUrl);
   const ingressPath = workflowPath('helio', spec.gameId, spec.accountId, spec.inboxId, spec.bot.id, 'bot');
   const tableName = ragTableName(spec);
+  const runtimePath = supportRuntimeWebhookPath(RUNTIME_REVISION);
 
   const sharedRuntime = await ensureSharedSupportRuntime({
     env,
@@ -127,7 +129,8 @@ export async function provisionBotWorkflows(rawSpec, options = {}) {
   const ingress = renderIngressWorkflow(mainTemplate, spec, {
     webhookPath: ingressPath,
     webhookBaseUrl,
-    supportRuntimeWebhookUrl: sharedRuntime.webhookUrl,
+    // Ingress runs inside n8n — use the internal base so Docker localhost is not the host.
+    supportRuntimeWebhookUrl: webhookUrl(internalWebhookBaseUrl, runtimePath),
   });
   patchWebhookNode(ingress, 'Chatwoot Bot Events', ingressPath, webhookBaseUrl);
   replaceEnvReferences(ingress, spec);
@@ -144,6 +147,7 @@ export async function provisionBotWorkflows(rawSpec, options = {}) {
     ragTableName: tableName,
     runtimeRevision: RUNTIME_REVISION,
     supportRuntimeWebhookUrl: sharedRuntime.webhookUrl,
+    supportRuntimeInternalWebhookUrl: webhookUrl(internalWebhookBaseUrl, runtimePath),
     workflowIds: {
       ingress: ingressWorkflow.id,
       supportRuntime: sharedRuntime.workflowId,
@@ -636,6 +640,32 @@ function publicWebhookBaseUrl(env, n8nBaseUrl) {
   return String(env.WEBHOOK_URL || env.N8N_WEBHOOK_URL || n8nBaseUrl)
     .trim()
     .replace(/\/$/, '');
+}
+
+/**
+ * Base URL for n8n→n8n HTTP calls (ingress invoking support runtime).
+ * Prefer an explicit internal URL, then a non-loopback N8N_BASE_URL (Compose
+ * service DNS like http://n8n:5678). Fall back to 127.0.0.1 so workflows
+ * running inside the n8n container do not depend on host-only WEBHOOK_URL.
+ */
+function internalWebhookBaseUrlFromEnv(env, _publicBaseUrl) {
+  const explicit = String(env.N8N_INTERNAL_WEBHOOK_URL || env.N8N_INTERNAL_BASE_URL || '')
+    .trim()
+    .replace(/\/$/, '');
+  if (explicit) return explicit;
+
+  const n8nBase = String(env.N8N_BASE_URL || '')
+    .trim()
+    .replace(/\/$/, '');
+  if (n8nBase && !isLoopbackHttpUrl(n8nBase)) {
+    return n8nBase;
+  }
+
+  return 'http://127.0.0.1:5678';
+}
+
+function isLoopbackHttpUrl(value) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(String(value || ''));
 }
 
 async function n8nRequest(n8n, fetchImpl, path, init = {}) {

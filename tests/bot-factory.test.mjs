@@ -533,6 +533,8 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Invoke Support Runtime'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
+  const invoke = ingressBody.nodes.find((node) => node.name === 'Invoke Support Runtime');
+  assert.match(String(invoke.parameters.url), /n8n-internal\.test\/webhook\/helio-support-runtime/);
   assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
   assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
 
@@ -546,6 +548,37 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.equal(result.ingressWorkflowId, 'ingress-workflow-id');
   assert.equal(result.supportRuntimeWorkflowId, 'runtime-workflow-id');
   assert.equal(result.mainWorkflowId, 'ingress-workflow-id');
+});
+
+test('provisionBotWorkflows uses internal base for ingress→runtime invoke', async () => {
+  const spec = validSpec({
+    gameId: 'space_quest',
+    bot: { id: 77, accessToken: 't', webhookSecret: 's' },
+  });
+  const { fetchImpl, calls } = createFakeFetch({
+    ingressId: 'ingress-id',
+    runtimeId: 'runtime-id',
+  });
+
+  const result = await provisionBotWorkflows(spec, {
+    fetchImpl,
+    env: {
+      N8N_API_KEY: 'test-n8n-api-key',
+      N8N_BASE_URL: 'http://n8n:5678',
+      WEBHOOK_URL: 'https://public-n8n.example.test',
+      BOT_FACTORY_API_SECRET: 'factory-secret',
+    },
+    mainTemplate: loadMainTemplate(),
+  });
+
+  const ingressBody = calls.find(
+    (call) => call.method === 'POST' && call.path === '/api/v1/workflows' && /Ingress/i.test(call.body.name),
+  )?.body;
+  const invoke = ingressBody.nodes.find((node) => node.name === 'Invoke Support Runtime');
+  assert.match(String(invoke.parameters.url), /^http:\/\/n8n:5678\/webhook\/helio-support-runtime/);
+  assert.match(result.webhookUrl, /^https:\/\/public-n8n\.example\.test\/webhook\//);
+  assert.match(result.supportRuntimeInternalWebhookUrl, /^http:\/\/n8n:5678\/webhook\//);
+  assert.match(result.supportRuntimeWebhookUrl, /^https:\/\/public-n8n\.example\.test\/webhook\//);
 });
 
 test('provisionBotWorkflows upserts existing ingress by deterministic name', async () => {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v1';
+export const RUNTIME_REVISION = 'helio-support-runtime-v2';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',
@@ -196,6 +196,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
   injectRuntimeLoadBotConfig(workflow);
   patchRuntimeSupportAgent(workflow);
   patchRuntimeFaqAndMemory(workflow);
+  patchRuntimeTaxonomyNodes(workflow);
   sanitizeProGolfVocabulary(workflow);
 
   workflow.connections['Accept Runtime Payload'] = {
@@ -332,6 +333,130 @@ function patchRuntimeFaqAndMemory(workflow) {
         "={{ $('Accept Runtime Payload').first().json.helioRuntime.memorySessionPrefix + String($json.accountId || $('Accept Runtime Payload').first().json.accountId || '') + ':' + String($json.conversationId || $('Accept Runtime Payload').first().json.conversationId || '') }}",
     };
   }
+}
+
+/** Replace ProGolf-baked taxonomy heuristics with live botConfig-driven logic. */
+function patchRuntimeTaxonomyNodes(workflow) {
+  const normalize = workflow.nodes.find((node) => node.name === 'Normalize Escalation Lookup');
+  if (normalize) {
+    normalize.parameters = {
+      ...(normalize.parameters || {}),
+      jsCode: policyDrivenNormalizeEscalationJs(),
+    };
+  }
+
+  const form = workflow.nodes.find((node) => node.name === 'Build Escalation Form');
+  if (form?.parameters?.jsCode) {
+    form.parameters.jsCode = policyDrivenBuildEscalationFormJs(form.parameters.jsCode);
+  }
+
+  const parser = workflow.nodes.find((node) => node.name === 'Agent Output Parser');
+  if (parser?.parameters?.inputSchema) {
+    try {
+      const schema = JSON.parse(parser.parameters.inputSchema);
+      if (schema.properties?.category) {
+        delete schema.properties.category.enum;
+        schema.properties.category.description =
+          'Support category slug from this bot\'s published taxonomy. Use other when unclear.';
+      }
+      if (schema.properties?.reward_source) {
+        delete schema.properties.reward_source.enum;
+        schema.properties.reward_source.description =
+          'Reward source slug from this bot\'s published taxonomy when category is reward. Empty otherwise. Use unknown if unclear.';
+      }
+      let schemaText = JSON.stringify(schema, null, 2);
+      schemaText = schemaText
+        .replace(/redirect to Pro Golf support only/gi, "redirect to this game's support topics only")
+        .replace(
+          /For club\/equipment or gameplay optimization questions[^.]*\./gi,
+          'For gameplay optimization questions, do not include improvement advice unless the exact causal effect appears in retrieved FAQ content.',
+        )
+        .replace(/\bPro Golf\b/gi, 'this game')
+        .replace(/\bprogolf\b/gi, 'this game');
+      parser.parameters.inputSchema = schemaText;
+    } catch {
+      // Keep template schema if unparsable.
+    }
+  }
+}
+
+function policyDrivenNormalizeEscalationJs() {
+  return `function getEventContext() {
+  try { return $('Accept Runtime Payload').first().json || {}; } catch (e) {}
+  try { return $('Normalize Claimed Batch').first().json || {}; } catch (e) {}
+  try { return $('Extract Event').first().json || {}; } catch (e) {}
+  return {};
+}
+function getBotTaxonomy() {
+  try {
+    const config = $('Load Bot Config').first().json?.botRuntimeConfig || {};
+    const taxonomy = config.taxonomy && typeof config.taxonomy === 'object' ? config.taxonomy : {};
+    return {
+      categories: Array.isArray(taxonomy.categories) ? taxonomy.categories.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean) : [],
+      rewardSources: Array.isArray(taxonomy.rewardSources) ? taxonomy.rewardSources.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean) : [],
+    };
+  } catch (e) {
+    return { categories: [], rewardSources: [] };
+  }
+}
+const ev = getEventContext();
+const item = $input.first().json;
+const out = { ...(item.output || {}) };
+const taxonomy = getBotTaxonomy();
+const categories = taxonomy.categories.length
+  ? taxonomy.categories
+  : ['account', 'technical_bug', 'other', 'reward'];
+const rewardSources = taxonomy.rewardSources;
+
+function lower(value) { return String(value || '').trim().toLowerCase(); }
+function combinedText() { return [ev.content, out.reply, out.summary].map(lower).join(' '); }
+function includesAny(text, words) { return words.some((word) => text.includes(word)); }
+function humanizeSlug(slug) {
+  return String(slug || '').replace(/_/g, ' ').trim().toLowerCase();
+}
+
+let category = lower(out.category);
+if (!categories.includes(category)) category = categories.includes('other') ? 'other' : (categories[0] || 'other');
+
+const text = combinedText();
+const playerReport = /\\b(cheat(er|ing)?|hacker|hack(ing|ed)?|unfair|harass(ment|ing|ed)?|abusive?|report(ing)?\\s+(a\\s+)?player|disruptive|toxic)\\b/i.test(text);
+if (playerReport && categories.includes('player_report') && ['gameplay_tournament', 'other'].includes(category)) {
+  category = 'player_report';
+}
+
+let rewardSource = lower(out.reward_source || out.rewardSource);
+if (category === 'reward') {
+  if (!rewardSources.includes(rewardSource)) {
+    rewardSource = '';
+    for (const source of rewardSources) {
+      const label = humanizeSlug(source);
+      if (!label) continue;
+      if (includesAny(text, [label, source])) {
+        rewardSource = source;
+        break;
+      }
+    }
+    if (!rewardSource) rewardSource = rewardSources.includes('unknown') ? 'unknown' : (rewardSources[0] ? 'unknown' : '');
+  }
+} else {
+  rewardSource = '';
+}
+
+out.category = category;
+out.reward_source = rewardSource;
+return [{ json: { ...item, output: out } }];`;
+}
+
+function policyDrivenBuildEscalationFormJs(existingCode) {
+  let code = String(existingCode);
+  if (!code.includes('Accept Runtime Payload')) {
+    code = code.replace(
+      "try { return $('Normalize Claimed Batch').first().json || {}; } catch (e) {}",
+      "try { return $('Accept Runtime Payload').first().json || {}; } catch (e) {}\n  try { return $('Normalize Claimed Batch').first().json || {}; } catch (e) {}",
+    );
+  }
+  code = code.replace(/golf pass points\|?/gi, '');
+  return code;
 }
 
 export function sanitizeProGolfVocabulary(workflow) {

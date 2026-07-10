@@ -34,7 +34,7 @@ const MAIN_TEMPLATE_PATH = join(
 const DEFAULT_N8N_BASE_URL = 'http://localhost:5678';
 export const SHARED_FAQ_SYNC_WORKFLOW_NAME = 'Helio FAQ Sync';
 export const SHARED_FAQ_SYNC_WEBHOOK_PATH = 'helio-faq-sync';
-export { RUNTIME_REVISION };
+export { RUNTIME_REVISION, renderSharedSupportRuntime };
 
 let cachedRuntimeContract;
 

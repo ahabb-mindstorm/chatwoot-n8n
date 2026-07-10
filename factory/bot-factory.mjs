@@ -175,6 +175,7 @@ export async function ensureSharedSupportRuntime(options = {}) {
     webhookBaseUrl,
     revision: RUNTIME_REVISION,
   });
+  injectWorkflowCredentials(rendered);
   const workflow = await upsertAndActivateWorkflow(rendered, n8n, fetchImpl);
   return {
     workflowId: workflow.id,

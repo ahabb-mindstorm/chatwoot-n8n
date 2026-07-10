@@ -67,8 +67,8 @@ export function createFactoryServer() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  createFactoryServer().listen(PORT, async () => {
-    console.log(`Helio Bot Factory listening on :${PORT}`);
+  createFactoryServer().listen(PORT, '0.0.0.0', async () => {
+    console.log(`Helio Bot Factory listening on 0.0.0.0:${PORT}`);
     try {
       const sharedFaqSync = await ensureSharedFaqSyncWorkflow();
       console.log(

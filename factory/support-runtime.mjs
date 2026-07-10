@@ -120,6 +120,8 @@ export function renderIngressWorkflow(template, spec, options) {
   };
 
   workflow.nodes = workflow.nodes.filter((node) => !AGENT_NODE_NAMES.has(node.name));
+  // Ingress is verify/enqueue/invoke only — drop schedules and agent-side recovery.
+  workflow.nodes = workflow.nodes.filter((node) => !SHARED_RUNTIME_DROP.has(node.name));
   pruneConnections(workflow);
 
   const configUrl =

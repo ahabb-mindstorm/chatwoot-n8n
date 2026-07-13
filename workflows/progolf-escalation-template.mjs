@@ -165,6 +165,24 @@ export function buildProgolfEscalationRequirements() {
       { name: 'date_time', label: 'Date/time', type: 'date', placeholder: 'Date and approximate time' },
       { name: 'description', label: 'Description', type: 'text_area', placeholder: 'What reward is missing and where did you expect it?' },
     ]),
+    // Helio requires an escalation form for every taxonomy category slug, including "reward".
+    reward: wrap('reward', [
+      {
+        name: 'reward_source',
+        label: 'Which reward is missing?',
+        type: 'select',
+        options: [
+          { label: 'Tournament or Championship', value: 'tournament' },
+          { label: 'Daily Bonus', value: 'daily_bonus' },
+          { label: 'Golf Pass', value: 'golf_pass' },
+          { label: 'TopShot', value: 'topshot' },
+          { label: 'Loot Bag or Loot Ladder', value: 'loot_bag' },
+          { label: 'Other reward', value: 'other' },
+        ],
+      },
+      { name: 'date_time', label: 'Date/time', type: 'date', placeholder: 'Date and approximate time' },
+      { name: 'description', label: 'Description', type: 'text_area', placeholder: 'What reward is missing and where did you expect it?' },
+    ]),
   };
 }
 

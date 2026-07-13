@@ -540,6 +540,14 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   });
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
+  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Load Ticket State'));
+  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Persist Ticket State'));
+  assert.deepEqual(runtimeBody.connections['Load Bot Config']?.main?.[0], [
+    { node: 'Load Ticket State', type: 'main', index: 0 },
+  ]);
+  assert.deepEqual(runtimeBody.connections['Persist Ticket State']?.main?.[0], [
+    { node: 'Finalize Batch', type: 'main', index: 0 },
+  ]);
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Claim Send Reply'));
   assert.deepEqual(runtimeBody.connections['Route Requirement Lookup']?.main?.[0], [
     { node: 'Claim Send Reply', type: 'main', index: 0 },

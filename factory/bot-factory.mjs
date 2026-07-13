@@ -987,7 +987,11 @@ function injectWorkflowCredentials(workflow) {
       node.credentials = { openAiApi: WORKFLOW_CREDENTIALS.openAi };
       continue;
     }
-    if (node.name === 'Postgres Chat Memory' || node.name === 'Search FAQ Knowledge Base') {
+    if (
+      node.type === 'n8n-nodes-base.postgres' ||
+      node.name === 'Postgres Chat Memory' ||
+      node.name === 'Search FAQ Knowledge Base'
+    ) {
       node.credentials = { postgres: WORKFLOW_CREDENTIALS.botPostgres };
     }
   }

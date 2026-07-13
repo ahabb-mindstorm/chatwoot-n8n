@@ -213,6 +213,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
   delete workflow.connections['Chatwoot Bot Events'];
 
   injectRuntimeLoadBotConfig(workflow);
+  injectRuntimeTicketState(workflow);
   patchRuntimeSupportAgent(workflow);
   patchRuntimeFaqAndMemory(workflow);
   patchRuntimeTaxonomyNodes(workflow);
@@ -223,7 +224,19 @@ export function renderSharedSupportRuntime(template, options = {}) {
     main: [[{ node: 'Load Bot Config', type: 'main', index: 0 }]],
   };
   workflow.connections['Load Bot Config'] = {
+    main: [[{ node: 'Load Ticket State', type: 'main', index: 0 }]],
+  };
+  workflow.connections['Load Ticket State'] = {
+    main: [[{ node: 'Merge Ticket State', type: 'main', index: 0 }]],
+  };
+  workflow.connections['Merge Ticket State'] = {
     main: [[{ node: 'Support Agent', type: 'main', index: 0 }]],
+  };
+  workflow.connections['Prepare Ticket State Persist'] = {
+    main: [[{ node: 'Persist Ticket State', type: 'main', index: 0 }]],
+  };
+  workflow.connections['Persist Ticket State'] = {
+    main: [[{ node: 'Finalize Batch', type: 'main', index: 0 }]],
   };
 
   return workflow;
@@ -331,6 +344,136 @@ return {
 
   workflow.nodes = workflow.nodes.filter((node) => node.name !== 'Load Bot Config');
   workflow.nodes.push(loadNode);
+}
+
+function injectRuntimeTicketState(workflow) {
+  const postgresCreds = { postgres: { id: 'botPgNeonLocal01', name: 'Bot Postgres' } };
+
+  const loadNode = {
+    parameters: {
+      operation: 'executeQuery',
+      query: `={{ "SELECT * FROM bot_load_ticket_state(" + Number($('Accept Runtime Payload').first().json.accountId || $('Accept Runtime Payload').first().json.helioRuntime.accountId) + ", " + Number($('Accept Runtime Payload').first().json.conversationId) + ", " + Number($('Accept Runtime Payload').first().json.helioRuntime.agentBotId) + ");" }}`,
+      options: { queryBatching: 'single' },
+    },
+    id: deterministicId('shared-runtime-load-ticket-state', 'pg'),
+    name: 'Load Ticket State',
+    type: 'n8n-nodes-base.postgres',
+    typeVersion: 2.5,
+    position: [860, 300],
+    credentials: postgresCreds,
+  };
+
+  const mergeNode = {
+    parameters: {
+      mode: 'runOnceForEachItem',
+      jsCode: `const prior = $('Load Bot Config').first().json || {};
+const loaded = $input.item?.json || {};
+const ticketState = {
+  found: Boolean(loaded.found),
+  phase: String(loaded.phase || 'idle'),
+  botStatus: String(loaded.bot_status || loaded.botStatus || 'idle'),
+  caseType: loaded.case_type || loaded.caseType || null,
+  lastIntent: loaded.last_intent || loaded.lastIntent || null,
+  supportState: loaded.support_state || loaded.supportState || {},
+  supportStateVersion: Number(loaded.support_state_version || loaded.supportStateVersion || 1),
+  clarificationPending: Boolean(loaded.clarification_pending || loaded.clarificationPending),
+  lastMessageId: loaded.last_message_id || loaded.lastMessageId || null,
+  updatedAt: loaded.updated_at || loaded.updatedAt || null,
+};
+return { json: { ...prior, ticketState } };`,
+    },
+    id: deterministicId('shared-runtime-merge-ticket-state', 'code'),
+    name: 'Merge Ticket State',
+    type: 'n8n-nodes-base.code',
+    typeVersion: 2,
+    position: [1020, 300],
+  };
+
+  const preparePersist = {
+    parameters: {
+      mode: 'runOnceForEachItem',
+      jsCode: `const accept = $('Accept Runtime Payload').first().json || {};
+const runtime = accept.helioRuntime || {};
+let merge = {};
+try { merge = $('Merge QA With Routing Decision').first().json || {}; } catch (e) { merge = {}; }
+const out = merge.output || merge.support_output || {};
+const action = String(out.action || 'reply').toLowerCase();
+let phase = 'clarify';
+if (action === 'handoff' || action === 'escalate' || action === 'notify') phase = 'handoff';
+else if (action === 'form' || action === 'send_form' || action === 'escalation_form') phase = 'route';
+else if (action === 'reply') {
+  const prior = (() => { try { return $('Merge Ticket State').first().json?.ticketState?.phase; } catch (e) { return 'idle'; } })();
+  phase = prior && prior !== 'idle' ? prior : 'clarify';
+}
+const knownFields = out.collected_fields && typeof out.collected_fields === 'object' ? out.collected_fields : {};
+const supportState = {
+  version: 1,
+  category: out.category || '',
+  reward_source: out.reward_source || out.rewardSource || '',
+  known_fields: knownFields,
+  summary: out.summary || '',
+  last_bot_reply_summary: String(out.reply || '').slice(0, 240),
+  updated_at: new Date().toISOString(),
+};
+return {
+  json: {
+    ticketStateUpsert: {
+      accountId: Number(accept.accountId || runtime.accountId),
+      conversationId: Number(accept.conversationId),
+      agentBotId: Number(runtime.agentBotId),
+      phase,
+      botStatus: phase === 'handoff' ? 'handoff' : 'active',
+      caseType: out.category || null,
+      lastIntent: action,
+      supportState,
+      clarificationPending: phase === 'clarify',
+      lastMessageId: accept.messageId != null ? String(accept.messageId) : null,
+    },
+  },
+};`,
+    },
+    id: deterministicId('shared-runtime-prepare-ticket-persist', 'code'),
+    name: 'Prepare Ticket State Persist',
+    type: 'n8n-nodes-base.code',
+    typeVersion: 2,
+    position: [4600, 300],
+  };
+
+  const persistNode = {
+    parameters: {
+      operation: 'executeQuery',
+      query: `={{ (() => { const u = $json.ticketStateUpsert || {}; const state = JSON.stringify(u.supportState || {}).replace(/'/g, "''"); return "SELECT * FROM bot_upsert_ticket_state(" + Number(u.accountId) + ", " + Number(u.conversationId) + ", " + Number(u.agentBotId) + ", '" + String(u.phase || 'idle').replace(/'/g, "''") + "', '" + String(u.botStatus || u.phase || 'idle').replace(/'/g, "''") + "', " + (u.caseType ? ("'" + String(u.caseType).replace(/'/g, "''") + "'") : "NULL") + ", " + (u.lastIntent ? ("'" + String(u.lastIntent).replace(/'/g, "''") + "'") : "NULL") + ", '" + state + "'::jsonb, " + (u.clarificationPending ? "TRUE" : "FALSE") + ", " + (u.lastMessageId ? ("'" + String(u.lastMessageId).replace(/'/g, "''") + "'") : "NULL") + ");"; })() }}`,
+      options: { queryBatching: 'single' },
+    },
+    id: deterministicId('shared-runtime-persist-ticket-state', 'pg'),
+    name: 'Persist Ticket State',
+    type: 'n8n-nodes-base.postgres',
+    typeVersion: 2.5,
+    position: [4820, 300],
+    credentials: postgresCreds,
+  };
+
+  const drop = new Set([
+    'Load Ticket State',
+    'Merge Ticket State',
+    'Prepare Ticket State Persist',
+    'Persist Ticket State',
+  ]);
+  workflow.nodes = workflow.nodes.filter((node) => !drop.has(node.name));
+  workflow.nodes.push(loadNode, mergeNode, preparePersist, persistNode);
+
+  // Route every former Finalize Batch edge through persist.
+  for (const [from, conn] of Object.entries(workflow.connections || {})) {
+    if (from === 'Persist Ticket State' || from === 'Prepare Ticket State Persist') continue;
+    const main = conn?.main;
+    if (!Array.isArray(main)) continue;
+    for (const branch of main) {
+      if (!Array.isArray(branch)) continue;
+      for (const edge of branch) {
+        if (edge?.node === 'Finalize Batch') edge.node = 'Prepare Ticket State Persist';
+      }
+    }
+  }
 }
 
 function patchRuntimeSupportAgent(workflow) {

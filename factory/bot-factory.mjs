@@ -138,6 +138,7 @@ export async function provisionBotWorkflows(rawSpec, options = {}) {
   patchExecutionTags(ingress);
   patchRecoveryScope(ingress, spec);
   patchIngestAgentBotId(ingress, spec);
+  patchClaimAgentBotId(ingress, spec);
 
   const ingressWorkflow = await upsertAndActivateWorkflow(ingress, n8n, fetchImpl);
 
@@ -463,6 +464,7 @@ export function renderMainWorkflow(template, spec, options) {
   patchAgentOutputParserCopy(workflow);
   patchRecoveryScope(workflow, spec);
   patchIngestAgentBotId(workflow, spec);
+  patchClaimAgentBotId(workflow, spec);
   injectWorkflowCredentials(workflow);
   return workflow;
 }
@@ -916,6 +918,31 @@ function patchIngestAgentBotId(workflow, spec) {
       `debounceMs, ', ', ${agentBotId}, ');'`,
     );
   }
+}
+
+function patchClaimAgentBotId(workflow, spec) {
+  const agentBotId = Number(spec.bot.id);
+  const claim = workflow.nodes.find((candidate) => candidate.name === 'Claim Debounced Batch');
+  if (!claim?.parameters?.query) return;
+  const query = claim.parameters.query;
+  if (query.includes(`, ${agentBotId});`) || query.includes(`, ${agentBotId})`)) return;
+
+  // Expression form ends with: Math.max(30, Number($env.CONVERSATION_LEASE_SECONDS || 300)) + ");"
+  if (query.includes('CONVERSATION_LEASE_SECONDS || 300)) + ");"')) {
+    claim.parameters.query = query.replace(
+      'CONVERSATION_LEASE_SECONDS || 300)) + ");"',
+      `CONVERSATION_LEASE_SECONDS || 300)) + ", ${agentBotId});"`,
+    );
+    return;
+  }
+
+  claim.parameters.query = query.replace(
+    /bot_claim_conversation_batch\(([\s\S]*?)\)/,
+    (match, args) => {
+      if (String(args).includes(String(agentBotId))) return match;
+      return `bot_claim_conversation_batch(${args}, ${agentBotId})`;
+    },
+  );
 }
 
 function patchFaqVectorStore(workflow, spec) {

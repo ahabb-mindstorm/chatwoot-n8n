@@ -118,6 +118,13 @@ test('scoped claim migration filters pending events by agent_bot_id and threads 
   );
 });
 
+test('unscoped recover migration only touches legacy agent_bot_id 0', () => {
+  const migration = readFileSync(join(root, 'migrations/012_unscoped_recover_legacy_only.sql'), 'utf8');
+  assert.match(migration, /v_agent_bot_id BIGINT := COALESCE\(p_agent_bot_id, 0\)/);
+  assert.match(migration, /AND l\.agent_bot_id = v_agent_bot_id/);
+  assert.doesNotMatch(migration, /p_agent_bot_id IS NULL OR l\.agent_bot_id/);
+});
+
 test('Helio ingress provision stamps ingest + claim with agentBotId and isolates runtime memory/RAG', async () => {
   const botA = spaceQuestSpec(55);
   const botB = spaceQuestSpec(77);

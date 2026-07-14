@@ -20,7 +20,7 @@ export function createSupportRuntime(dependencies) {
         }),
       ]);
       if (ticketState.phase === 'human_owned') {
-        const committed = await dependencies.turns.commit({
+        const commitResult = await commitTurn(dependencies.turns, {
           deliveryId: input.deliveryId,
           agentBotId: input.agentBotId,
           conversationId: input.conversationId,
@@ -32,6 +32,8 @@ export function createSupportRuntime(dependencies) {
             dependencies.runtimeRevision || DEFAULT_RUNTIME_REVISION,
           policyVersion: policy.configVersion,
         });
+        if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;
+        const committed = commitResult.committed;
         return {
           deliveryId: input.deliveryId,
           outcome: 'ignored',
@@ -81,19 +83,8 @@ export function createSupportRuntime(dependencies) {
         };
       }
       const effects = buildEffects(input.deliveryId, decision);
-      const nextState = {
-        ...ticketState,
-        phase: decision.outcome,
-        ...(decision.outcome === 'self_serve'
-          ? { selfServeAttempted: true }
-          : {}),
-        ...(decision.category ? { category: decision.category } : {}),
-        ...(decision.knownValues
-          ? { knownValues: decision.knownValues }
-          : {}),
-        ...(decision.summary ? { summary: decision.summary } : {}),
-      };
-      const committed = await dependencies.turns.commit({
+      const nextState = transitionTicketState(ticketState, decision);
+      const commitResult = await commitTurn(dependencies.turns, {
         deliveryId: input.deliveryId,
         agentBotId: input.agentBotId,
         conversationId: input.conversationId,
@@ -106,6 +97,8 @@ export function createSupportRuntime(dependencies) {
         policyVersion: policy.configVersion,
         ...(failureCode ? { failureCode } : {}),
       });
+      if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;
+      const committed = commitResult.committed;
 
       return {
         deliveryId: input.deliveryId,
@@ -126,7 +119,22 @@ export function createSupportRuntime(dependencies) {
   };
 }
 
+async function commitTurn(turns, turn) {
+  try {
+    return { committed: await turns.commit(turn) };
+  } catch (error) {
+    if (error?.code !== 'duplicate_delivery') throw error;
+    const receipt = await turns.findByDeliveryId(turn.deliveryId);
+    if (!receipt) throw error;
+    return { duplicateReceipt: { ...receipt, status: 'duplicate' } };
+  }
+}
+
 function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
+  if (proposal.action === 'reply') {
+    return { outcome: 'reply', reply: requiredReply(proposal) };
+  }
+
   if (proposal.action === 'clarify') {
     const reply = requiredReply(proposal);
     return { outcome: 'clarify', reply };
@@ -134,64 +142,77 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
 
   if (proposal.action === 'self_serve') {
     const reply = requiredReply(proposal);
-    const availableIds = new Set(faqEvidence.map((item) => String(item.id)));
+    const availableEvidence = new Map(
+      faqEvidence.map((item) => [String(item.id), item]),
+    );
     const evidenceIds = Array.isArray(proposal.faqEvidenceIds)
       ? proposal.faqEvidenceIds.map(String)
       : [];
     if (
       evidenceIds.length === 0 ||
-      evidenceIds.some((evidenceId) => !availableIds.has(evidenceId))
+      evidenceIds.some((evidenceId) => !availableEvidence.has(evidenceId))
     ) {
       throw new Error('Self-service proposal requires current-turn FAQ evidence');
     }
-    return { outcome: 'self_serve', reply, evidenceIds };
+    const groundingQuotes = Array.isArray(proposal.groundingQuotes)
+      ? proposal.groundingQuotes
+      : [];
+    if (
+      groundingQuotes.length === 0 ||
+      groundingQuotes.some((grounding) => {
+        const evidenceId = String(grounding?.evidenceId || '');
+        const quote = String(grounding?.quote || '').trim();
+        const evidence = availableEvidence.get(evidenceId);
+        const evidenceText = String(
+          evidence?.content || evidence?.text || evidence?.answer || '',
+        );
+        return (
+          !evidenceIds.includes(evidenceId) ||
+          !quote ||
+          !includesNormalized(evidenceText, quote) ||
+          !includesNormalized(reply, quote)
+        );
+      })
+    ) {
+      throw new Error('Self-service reply is not grounded in cited FAQ text');
+    }
+    return { outcome: 'self_serve', reply, evidenceIds, groundingQuotes };
   }
 
   if (proposal.action === 'escalate') {
     if (ticketState.selfServeAttempted !== true) {
       throw new Error('Escalation requires a prior self-service attempt');
     }
-    const category = String(proposal.category || '').trim();
-    const configuredCategories = new Set(
-      (policy.taxonomy?.categories || [])
-        .map((item) =>
-          typeof item === 'string'
-            ? item
-            : item?.id || item?.value || item?.slug,
-        )
-        .filter(Boolean)
-        .map(String),
-    );
-    if (!configuredCategories.has(category)) {
-      throw new Error(`Escalation category is not configured: ${category || 'missing'}`);
-    }
-    const requirement = policy.escalationRequirements?.[category];
-    const fields = Array.isArray(requirement?.items) ? requirement.items : [];
-    if (fields.length === 0) {
-      throw new Error(`Escalation requirements are missing for category: ${category}`);
-    }
-    const knownValues = normalizeKnownValues(
-      ticketState.knownValues,
-      proposal.collectedFields,
-    );
-    const missingFields = fields.filter(
-      (field) => !hasKnownValue(knownValues[field.name]),
-    );
+    const escalation = resolveEscalationDecision({
+      policy,
+      category: proposal.category,
+      rewardSource: proposal.rewardSource || proposal.reward_source,
+      knownValueSources: [ticketState.knownValues, proposal.collectedFields],
+    });
     return {
-      outcome: missingFields.length > 0 ? 'request_form' : 'handoff',
-      category,
+      ...escalation,
       summary: String(proposal.summary || '').trim(),
-      knownValues,
-      form: {
-        title: requirement.title || 'Support details',
-        fields: missingFields,
-        attachmentConfig:
-          requirement.attachment_config || requirement.attachmentConfig || null,
-      },
     };
   }
 
   throw new Error(`Unsupported runtime action: ${proposal?.action || 'missing'}`);
+}
+
+function transitionTicketState(ticketState, decision) {
+  const nextPhase =
+    decision.outcome === 'reply' || decision.outcome === 'ignored'
+      ? ticketState.phase
+      : decision.outcome;
+  return {
+    ...ticketState,
+    phase: nextPhase,
+    ...(decision.outcome === 'self_serve'
+      ? { selfServeAttempted: true }
+      : {}),
+    ...(decision.category ? { category: decision.category } : {}),
+    ...(decision.knownValues ? { knownValues: decision.knownValues } : {}),
+    ...(decision.summary ? { summary: decision.summary } : {}),
+  };
 }
 
 function buildEffects(deliveryId, decision) {
@@ -271,24 +292,78 @@ function authorizeFormSubmission(event, policy, ticketState) {
   if (ticketState.phase !== 'request_form' || !category) {
     throw new Error('Form submission requires pending escalation requirements');
   }
-  const requirement = policy.escalationRequirements?.[category];
-  const fields = Array.isArray(requirement?.items) ? requirement.items : [];
+  return {
+    ...resolveEscalationDecision({
+      policy,
+      category,
+      rewardSource: ticketState.rewardSource,
+      knownValueSources: [ticketState.knownValues, event.values],
+    }),
+    summary: String(ticketState.summary || '').trim(),
+  };
+}
+
+function resolveEscalationDecision({
+  policy,
+  category: categoryInput,
+  rewardSource: rewardSourceInput,
+  knownValueSources,
+}) {
+  const category = String(categoryInput || '').trim();
+  const configuredCategories = taxonomyValues(policy.taxonomy?.categories);
+  if (!configuredCategories.has(category)) {
+    throw new Error(`Escalation category is not configured: ${category || 'missing'}`);
+  }
+
+  const rewardSource = category === 'reward'
+    ? String(rewardSourceInput || '').trim()
+    : '';
+  const configuredRewardSources = taxonomyValues(
+    policy.taxonomy?.rewardSources || policy.taxonomy?.reward_sources,
+  );
+  if (
+    category === 'reward' &&
+    configuredRewardSources.size > 0 &&
+    !configuredRewardSources.has(rewardSource)
+  ) {
+    throw new Error(
+      `Reward source is not configured: ${rewardSource || 'missing'}`,
+    );
+  }
+
+  const requirements = policy.escalationRequirements || {};
+  const requirement = requirements[rewardSource] || requirements[category];
+  const fields = Array.isArray(requirement?.items)
+    ? requirement.items
+    : Array.isArray(requirement?.fields)
+      ? requirement.fields
+      : [];
   if (fields.length === 0) {
     throw new Error(`Escalation requirements are missing for category: ${category}`);
   }
-  const knownValues = normalizeKnownValues(
-    ticketState.knownValues,
-    event.values,
+  const allowedFieldNames = new Set(fields.map((field) => field.name).filter(Boolean));
+  const requiredFieldNames = new Set(
+    Array.isArray(requirement.required_fields)
+      ? requirement.required_fields
+      : fields
+          .filter((field) => field.required !== false)
+          .map((field) => field.name),
+  );
+  const knownValues = normalizeKnownValues(...knownValueSources);
+  const configuredKnownValues = Object.fromEntries(
+    Object.entries(knownValues).filter(([name]) => allowedFieldNames.has(name)),
   );
   const missingFields = fields.filter(
-    (field) => !hasKnownValue(knownValues[field.name]),
+    (field) =>
+      requiredFieldNames.has(field.name) &&
+      !hasKnownValue(configuredKnownValues[field.name]),
   );
 
   return {
     outcome: missingFields.length > 0 ? 'request_form' : 'handoff',
     category,
-    summary: String(ticketState.summary || '').trim(),
-    knownValues,
+    ...(rewardSource ? { rewardSource } : {}),
+    knownValues: configuredKnownValues,
     form: {
       title: requirement.title || 'Support details',
       fields: missingFields,
@@ -296,6 +371,19 @@ function authorizeFormSubmission(event, policy, ticketState) {
         requirement.attachment_config || requirement.attachmentConfig || null,
     },
   };
+}
+
+function taxonomyValues(items) {
+  return new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) =>
+        typeof item === 'string'
+          ? item
+          : item?.id || item?.value || item?.slug,
+      )
+      .filter(Boolean)
+      .map(String),
+  );
 }
 
 function requiredReply(proposal) {
@@ -319,6 +407,15 @@ function normalizeKnownValues(...sources) {
 
 function hasKnownValue(value) {
   return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
+function includesNormalized(text, expected) {
+  const normalize = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  return normalize(text).includes(normalize(expected));
 }
 
 function assertDependencies(dependencies) {

@@ -79,6 +79,71 @@ test('a vague player problem produces a clarification turn through handleTurn', 
   assert.equal(commits[0].nextState.phase, 'clarify');
 });
 
+test('a non-factual reply does not invent a ticket-state phase or hand off', async () => {
+  const commits = [];
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v3',
+    policySnapshots: {
+      async getPublished() {
+        return {
+          configVersion: 7,
+          taxonomy: { categories: [{ id: 'technical', label: 'Technical' }] },
+          escalationRequirements: {
+            technical: {
+              items: [{ name: 'device', label: 'Device', type: 'text' }],
+            },
+          },
+        };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return { action: 'reply', reply: 'Hi! How can I help with the game?' };
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        commits.push(turn);
+        return { stateVersion: 1, effectIds: ['effect-reply'] };
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-reply',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-reply',
+        text: 'Hello',
+        attachments: [],
+      },
+    ],
+  });
+
+  assert.equal(receipt.outcome, 'reply');
+  assert.equal(receipt.status, 'completed');
+  assert.equal(commits[0].nextState.phase, 'idle');
+  assert.deepEqual(receipt.effects.map((effect) => effect.type), [
+    'send_public_message',
+  ]);
+});
+
 test('a factual self-service reply requires current-turn FAQ evidence', async () => {
   const commits = [];
   const runtime = createSupportRuntime({
@@ -120,6 +185,12 @@ test('a factual self-service reply requires current-turn FAQ evidence', async ()
           action: 'self_serve',
           reply: 'Use the Forgot Password link on the sign-in screen.',
           faqEvidenceIds: ['faq-password-reset'],
+          groundingQuotes: [
+            {
+              evidenceId: 'faq-password-reset',
+              quote: 'Use the Forgot Password link on the sign-in screen.',
+            },
+          ],
         };
       },
     },
@@ -198,7 +269,10 @@ test('an unresolved problem produces a form containing only missing escalation r
           action: 'escalate',
           category: 'account',
           summary: 'The player cannot regain access after trying password reset.',
-          collectedFields: { player_id: 'SQ-123' },
+          collectedFields: {
+            player_id: 'SQ-123',
+            internal_override: 'must not reach the Team',
+          },
         };
       },
     },
@@ -341,7 +415,7 @@ test('a complete form submission produces an independent critical handoff effect
   });
 });
 
-test('fabricated FAQ evidence fails closed without publishing the proposed answer', async () => {
+test('a real FAQ id without answer-grounding evidence fails closed', async () => {
   const commits = [];
   const runtime = createSupportRuntime({
     runtimeRevision: 'helio-support-runtime-v3',
@@ -374,7 +448,8 @@ test('fabricated FAQ evidence fails closed without publishing the proposed answe
         return {
           action: 'self_serve',
           reply: 'Invented instructions that must not reach the player.',
-          faqEvidenceIds: ['faq-invented'],
+          faqEvidenceIds: ['faq-real'],
+          groundingQuotes: [],
         };
       },
     },
@@ -489,4 +564,71 @@ test('a human-owned ticket is finalized without invoking the model or producing 
   assert.deepEqual(receipt.effects, []);
   assert.equal(commits.length, 1);
   assert.equal(commits[0].nextState.phase, 'human_owned');
+});
+
+test('an atomic duplicate discovered during commit returns the original turn receipt', async () => {
+  let lookupCount = 0;
+  const originalReceipt = {
+    deliveryId: 'delivery-race',
+    outcome: 'reply',
+    status: 'completed',
+    runtimeRevision: 'helio-support-runtime-v3',
+    policyVersion: 10,
+    stateVersion: 7,
+    effectIds: ['original-effect'],
+    effects: [],
+  };
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v3',
+    policySnapshots: {
+      async getPublished() {
+        return { configVersion: 10, taxonomy: { categories: [] } };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 6, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return { action: 'reply', reply: 'Hello!' };
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        lookupCount += 1;
+        return lookupCount === 1 ? null : originalReceipt;
+      },
+      async commit() {
+        const error = new Error('delivery already committed');
+        error.code = 'duplicate_delivery';
+        throw error;
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-race',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-race',
+        text: 'Hello',
+        attachments: [],
+      },
+    ],
+  });
+
+  assert.equal(receipt.status, 'duplicate');
+  assert.equal(receipt.stateVersion, 7);
+  assert.deepEqual(receipt.effectIds, ['original-effect']);
+  assert.equal(lookupCount, 2);
 });

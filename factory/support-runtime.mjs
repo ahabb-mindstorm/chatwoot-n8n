@@ -8,7 +8,7 @@ import { buildN8nSupportRuntimeAdapterSource } from '../runtime/n8n-support-runt
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v2';
+export const RUNTIME_REVISION = 'helio-support-runtime-v3';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',

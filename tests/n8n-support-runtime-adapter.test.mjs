@@ -101,6 +101,49 @@ test('FAQ evidence adapter accepts only current-turn FAQ tool observations', () 
   ]);
 });
 
+test('FAQ evidence adapter unwraps n8n AI response/text tool observations', () => {
+  const pageContent =
+    'If you’re experiencing issues while playing, please try the following troubleshooting steps: Ensure the game is up to date';
+  const evidence = normalizeN8nFaqEvidence([
+    {
+      action: { tool: 'Search_FAQ_Knowledge_Base' },
+      observation: [
+        {
+          response: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                pageContent,
+                metadata: {
+                  title: 'Game Freezing / Crashing / Not Loading',
+                  articleId: 80,
+                  agentBotId: 34,
+                },
+                id: 'bot_34_article_80_chunk_0',
+              }),
+            },
+            {
+              type: 'text',
+              text: JSON.stringify({
+                pageContent: 'try restarting your life',
+                metadata: { title: 'How do i fix a bugged game', articleId: 13 },
+                id: 'bot_34_article_13_chunk_0',
+              }),
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(evidence.length, 2);
+  assert.equal(evidence[0].id, 'bot_34_article_80_chunk_0');
+  assert.equal(evidence[0].content, pageContent);
+  assert.equal(evidence[0].title, 'Game Freezing / Crashing / Not Loading');
+  assert.equal(evidence[1].id, 'bot_34_article_13_chunk_0');
+  assert.notEqual(evidence[0].id, '80');
+});
+
 test('generated n8n adapter delegates turn persistence instead of using workflow static data', () => {
   const supportRuntimeSource = readFileSync(
     join(root, 'runtime', 'support-runtime.mjs'),

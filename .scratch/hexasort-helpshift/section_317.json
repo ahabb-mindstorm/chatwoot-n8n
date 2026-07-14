@@ -1,0 +1,91 @@
+{
+  "data": {
+    "id": "algames_section_20240129201331927-8044720aef6938a",
+    "title": "Account",
+    "publish_id": "317",
+    "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/section/317/",
+    "faqs": [
+      {
+        "id": "algames_faq_20240130215450669-2e468838bc23d34",
+        "title": "How do I connect my game to my Facebook Account?",
+        "body": "<p>The feature is currently in-active and under development. Shall be implemented soon.</p>",
+        "description": "The feature is currently in-active and under development. Shall be implemented soon.",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1665/",
+        "aria_label": "Article link to How do I connect my game to my Facebook Account? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240130221559252-fd590d53bb99e11",
+        "title": "How do I save my Progress?",
+        "body": "<p>If you are on <strong>App Version 4.3.02 or above</strong>, you can sync your progress online and play across devices.</p><ul><li>Go to <strong>Settings \u2192 Account</strong></li><li>Choose <strong>Facebook</strong>, <strong>Google</strong>, or <strong>Apple</strong> to sync your account</li><li>Once linked, you can log in with the same provider on any device to continue where you left off</li> </ul><p>Your progress is always saved locally on your device as well, but syncing makes sure it is backed up and available on other devices.</p><p><strong>Note:</strong> If you are on a version <strong>below 4.3.02</strong>, your progress will only be saved locally and cannot be transferred to another device.</p><p></p>",
+        "description": "If you are on App Version 4.3.02 or above, you can sync your progress online and play across devices.Go to Settings \u2192 AccountChoose Facebook...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1666/",
+        "aria_label": "Article link to How do I save my Progress? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240130223546177-b5cbaa5530ed7a0",
+        "title": "How do I find my user ID?",
+        "body": "<p>You can find your User ID by following these simple steps:</p><p>1-Head to the main menu of the game</p><p>2-Tap on the settings icon at the top right corner of the screen</p><p>3-Your User ID will be at the bottom of the settings panel. You'll see a small \"copy\" icon next to the User ID, tap on it to copy your ID automatically.</p>",
+        "description": "You can find your User ID by following these simple steps:1-Head to the main menu of the game2-Tap on the settings icon at the top right cor...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1674/",
+        "aria_label": "Article link to How do I find my user ID? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240130223605535-5b954582186136d",
+        "title": "How do I change my name from \u201cUser###\u201d to whatever?",
+        "body": "<ul><li>You can change your username by pressing on your avatar found in the main menu</li><li>A username doesn't have to be unique and you can set it as anything you like!</li><li>Make sure you don't use any offensive words in your username</li> </ul><p>&nbsp;<a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/4b340816-67f4-4afa-96d7-6bc615f5cc8c.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/4b340816-67f4-4afa-96d7-6bc615f5cc8c.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/4b340816-67f4-4afa-96d7-6bc615f5cc8c-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/4b340816-67f4-4afa-96d7-6bc615f5cc8c-2t.png 1.5x\" alt=\"\"></a> &nbsp;</p>",
+        "description": "You can change your username by pressing on your avatar found in the main menuA username doesn't have to be unique and you can set it as any...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1675/",
+        "aria_label": "Article link to How do I change my name from \u201cUser###\u201d to whatever? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240326004018853-8636b7fe36bf3f6",
+        "title": "How do I change language in the game?",
+        "body": "<p>You can easily select the language of your choice within the game.</p><p>Step 01 - Navigate to the settings panel found in the top right corner of the main menu.</p><p>Step 02 - Tap on the Select Language Button</p><p>Step 03 - Select your desired language from the available languages.</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b197f9ea-17ee-44e0-a9d6-377a7e54e0d5.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b197f9ea-17ee-44e0-a9d6-377a7e54e0d5.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b197f9ea-17ee-44e0-a9d6-377a7e54e0d5-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/b197f9ea-17ee-44e0-a9d6-377a7e54e0d5-2t.jpg 1.5x\" alt=\"\"> </a></p>",
+        "description": "You can easily select the language of your choice within the game.Step 01 - Navigate to the settings panel found in the top right corner of ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1888/",
+        "aria_label": "Article link to How do I change language in the game? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240810212131089-51812e98bd3268d",
+        "title": "I want to play from scratch, how do I delete my progress?",
+        "body": "<ul><li>If you want to play from scratch, you can delete your account from the settings panel and reopen the game again to restart your game</li><li>Please remember that once your account is deleted you cannot recover your progress</li> </ul><p>&nbsp;</p>",
+        "description": "If you want to play from scratch, you can delete your account from the settings panel and reopen the game again to restart your gamePlease r...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2280/",
+        "aria_label": "Article link to I want to play from scratch, how do I delete my progress? from section Account link"
+      },
+      {
+        "id": "algames_faq_20240810212251709-c6979830fceb67b",
+        "title": "What does a delete account do?",
+        "body": "<ul><li>Delete account, deletes your account permanently.</li><li>Once used the account can never be recovered and if you open HexaSort you would have to start from scratch.</li> </ul><p>&nbsp;</p>",
+        "description": "Delete account, deletes your account permanently.Once used the account can never be recovered and if you open HexaSort you would have to sta...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2281/",
+        "aria_label": "Article link to What does a delete account do?  from section Account link"
+      },
+      {
+        "id": "algames_faq_20240810213555674-1b6bf54568cb5da",
+        "title": "How do I change my avatar?",
+        "body": "<ul><li>You can change your avatar by pressing on the avatar found in the main menu</li><li>You can select from 12 different avatars, some of whom are unlocked when you complete a specific set of levels</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b701eda6-b4a4-49fe-a9b1-c9d226a49214.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b701eda6-b4a4-49fe-a9b1-c9d226a49214.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b701eda6-b4a4-49fe-a9b1-c9d226a49214-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/b701eda6-b4a4-49fe-a9b1-c9d226a49214-2t.png 1.5x\" alt=\"\"> </a></p>",
+        "description": "You can change your avatar by pressing on the avatar found in the main menuYou can select from 12 different avatars, some of whom are unlock...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2282/",
+        "aria_label": "Article link to How do I change my avatar?  from section Account link"
+      },
+      {
+        "id": "algames_faq_20250822010835952-e163f51383fd0d0",
+        "title": "How do I transfer my Progress to another device?",
+        "body": "<div data-hs-editor-attribute=\"callout\"><svg width=\"24px\" height=\"24px\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<g stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\"> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <path d=\"M12,4 C13.1041722,4 14.1406202,4.20833125 15.109375,4.625 C16.0885466,5.04166875 16.9401005,5.61197555 17.6640625,6.3359375 C18.3880245,7.05989945 18.9583313,7.91145344 19.375,8.890625 C19.7916687,9.85937984 20,10.8958278 20,12 C20,13.1041722 19.7916687,14.1406202 19.375,15.109375 C18.9583313,16.0885466 18.3880245,16.9401005 17.6640625,17.6640625 C16.9401005,18.3880245 16.0885466,18.9583313 15.109375,19.375 C14.1406202,19.7916687 13.1041722,20 12,20 C10.8958278,20 9.85937984,19.7916687 8.890625 ,19.375 C7.91145344,18.9583313 7.05989945,18.3880245 6.3359375, 17.6640625 C5.61197555,16.9401005 5.04166875,16.0885466 4.625, 15.109375 C4.20833125,14.1406202 4,13.1041722 4,12 C4,10.8958278 4.20833125,9.85937984 4.625,8.890625 C5.04166875,7.91145344 5.61197555,7.05989945 6.3359375,6.3359375 C7.05989945,5.61197555 7.91145344,5.04166875 8.890625,4.625 C9.85937984,4.20833125 10.8958278,4 12,4 Z M11,7 L11,9 L13,9 L13,7 L11,7 Z M14,17 L14,16 L13,16 L13,11 L10,11 L10,12 L11,12 L11,16 L10,16 L10,17\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;L14,17 Z\" fill=\"#000000\"></path></g> </svg><div data-hs-editor-attribute=\"callout-content\"><div>Account syncing is now available for app version 4.3.02 and above.</div></div> </div><p>&nbsp;</p><p><strong>Creating a Save</strong></p><ul><li>To create your save, please access your Settings Menu (the gear icon at the top right), select \"Save Progress\" and select either Facebook\\Apple or Facebook\\Google (depending on your device you are logged into).</li> </ul><p>&nbsp;</p><p><strong>Transferring the progress to a new device</strong></p><ul><li>On your <strong>old device</strong>, open the game and go to <strong>Settings \u2192 Account</strong>.</li><li style=\"list-style-type: none;\"><ul><li style=\"list-style-type: none;\"><ul><li>Sync your progress with <strong>Facebook</strong>, <strong>Google</strong>, or <strong>Apple</strong>.</li></ul> </li> </ul><ol><li>On your <strong>new device</strong>, install and open the game.<ul><li>Go to <strong>Settings \u2192 Account</strong> and log in with the <strong>same provider</strong> you used on the old device.</li></ul> </li> </ol><p><strong>Note:</strong> If you haven\u2019t synced your account with Facebook, Google, or Apple, your progress will only be stored locally and cannot be transferred to another device.</p></li> </ul>",
+        "description": "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2953/",
+        "aria_label": "Article link to How do I transfer my Progress to another device? from section Account link"
+      },
+      {
+        "id": "algames_faq_20250902184813070-65d5c377d83cced",
+        "title": "How do I recover my account?",
+        "body": "<ul><li>For version 1.6.50 you can save your progress locally on a device</li><li>This is only possible if you have deleted the game but not your account</li><li>Make sure your internet is connected so that the account can be recovered locally</li><li>Simply Reinstall the game on the same device to recover your account</li> </ul><p><strong>To Recover your account on a new device</strong></p><ol><li>On your <strong>old device</strong>, open the game and go to <strong>Settings \u2192 Account</strong>.<ul><li>Sync your progress with <strong>Facebook</strong>, <strong>Google</strong>, or <strong>Apple</strong>.</li></ul> </li><li>On your <strong>new device</strong>, install and open the game.<ul><li>Go to <strong>Settings \u2192 Account</strong> and log in with the <strong>same provider</strong> you used on the old device.</li></ul> </li> </ol><p></p>",
+        "description": "For version 1.6.50 you can save your progress locally on a deviceThis is only possible if you have deleted the game but not your accountMake...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2971/",
+        "aria_label": "Article link to How do I recover my account? from section Account link"
+      }
+    ],
+    "icon": "\ud83d\udc69\ud83c\udffb"
+  }
+}

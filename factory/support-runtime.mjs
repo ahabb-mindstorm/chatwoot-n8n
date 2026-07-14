@@ -642,7 +642,22 @@ function patchRuntimeFaqAndMemory(workflow) {
       ...(faq.parameters || {}),
       tableName: "={{ $('Accept Runtime Payload').first().json.helioRuntime.ragTableName }}",
       toolDescription:
-        "Searches this game's official FAQ knowledge base for grounded support answers. Use before answering how-to or troubleshooting questions.",
+        "Searches this game's official FAQ knowledge base for grounded support answers. Use before answering how-to or troubleshooting questions. For self_serve, cite returned metadata.doc_id values — never tool call ids.",
+      includeDocumentMetadata: true,
+      options: {
+        ...((faq.parameters || {}).options || {}),
+        distanceStrategy:
+          ((faq.parameters || {}).options || {}).distanceStrategy || 'cosine',
+        // bot_rag.* tables use `content`, not n8n's default `text` column.
+        columnNames: {
+          values: {
+            idColumnName: 'id',
+            vectorColumnName: 'embedding',
+            contentColumnName: 'content',
+            metadataColumnName: 'metadata',
+          },
+        },
+      },
     };
   }
 

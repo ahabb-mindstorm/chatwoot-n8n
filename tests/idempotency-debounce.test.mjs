@@ -10,6 +10,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const workflow = JSON.parse(readFileSync(join(root, "workflows/progolf-support-bot-v2-pgvector.json"), "utf8"));
 const migration = readFileSync(join(root, "migrations/006_idempotency_debounce.sql"), "utf8");
 const switchMigration = readFileSync(join(root, "migrations/007_agent_bot_kill_switch.sql"), "utf8");
+const compose = readFileSync(join(root, "docker-compose.yml"), "utf8");
+const queueCompose = readFileSync(join(root, "docker-compose.queue.yml"), "utf8");
+const sdkGenerator = readFileSync(join(root, "scripts/generate-v2-workflow-sdk.mjs"), "utf8");
+const workflowSdk = readFileSync(join(root, "workflows/progolf-support-bot-v2-pgvector.sdk.js"), "utf8");
 
 const node = (name) => workflow.nodes.find((candidate) => candidate.name === name);
 const targets = (name, output = 0) => (workflow.connections[name]?.main?.[output] || []).map((entry) => entry.node);
@@ -150,7 +154,64 @@ test("emergency switch defaults on and fails closed in normal and recovery paths
   assert.match(switchMigration, /bot_set_agent_enabled/);
   assert.equal(node("Load Agent Bot Switch").onError, "continueRegularOutput");
   assert.equal(node("Load Recovery Switch").onError, "continueRegularOutput");
-  assert.match(node("Suppress Disabled Event").parameters.query, /agent_bot_disabled/);
+  const suppress = node("Suppress Disabled Event");
+  assert.equal(suppress.onError, undefined);
+  const expression = suppress.parameters.query.slice(3, -2);
+  const query = new vm.Script(expression).runInNewContext({
+    $(name) {
+      assert.equal(name, "Ingest Durable Event");
+      return { item: { json: { event_id: 42 } } };
+    },
+  });
+  assert.equal(
+    query,
+    "UPDATE bot_inbound_events SET status = 'dead_letter', last_error = 'agent_bot_disabled', updated_at = clock_timestamp() WHERE id = 42 AND status = 'pending' RETURNING id, status, last_error;",
+  );
+});
+
+test("Chatwoot requests have bounded timeouts and retry only the idempotent status change", () => {
+  const chatwootNodes = [
+    "Send Reply",
+    "Save Escalation Context",
+    "Send Escalation Form",
+    "Post Internal Note",
+    "Label Conversation",
+    "Notify Player",
+    "Open Conversation",
+  ];
+
+  for (const name of chatwootNodes) {
+    assert.equal(node(name).parameters.options.timeout, 12000, name);
+  }
+
+  const open = node("Open Conversation");
+  assert.equal(open.retryOnFail, true);
+  assert.equal(open.maxTries, 3);
+  assert.equal(open.waitBetweenTries, 1500);
+
+  for (const name of chatwootNodes.filter((name) => name !== "Open Conversation")) {
+    assert.equal(node(name).retryOnFail, undefined, `${name} must not retry`);
+    assert.equal(node(name).maxTries, undefined, `${name} must not set maxTries`);
+    assert.equal(node(name).waitBetweenTries, undefined, `${name} must not set waitBetweenTries`);
+  }
+
+  assert.match(sdkGenerator, /retryOnFail && \(item\.maxTries !== undefined/);
+  assert.match(sdkGenerator, /item\.maxTries !== undefined/);
+  assert.match(sdkGenerator, /item\.waitBetweenTries !== undefined/);
+  assert.match(sdkGenerator, /workflows\/progolf-support-bot-v2-pgvector\.json/);
+});
+
+test("Slack alert variable is passed through and n8n images are pinned", () => {
+  assert.match(compose, /SLACK_ALERT_WEBHOOK_URL=\$\{SLACK_ALERT_WEBHOOK_URL:-\}/);
+  assert.match(queueCompose, /SLACK_ALERT_WEBHOOK_URL: \$\{SLACK_ALERT_WEBHOOK_URL:-\}/);
+
+  for (const source of [compose, queueCompose]) {
+    assert.doesNotMatch(source, /n8nio\/n8n:latest/);
+    assert.match(
+      source,
+      /docker\.n8n\.io\/n8nio\/n8n@sha256:ab26afca1a78fdb9b042eb6285565b869cdf1fd9c465cdcd9e2e5e7f764957d3/,
+    );
+  }
 });
 
 test("batch claims never busy-wait in Postgres", () => {
@@ -200,6 +261,28 @@ test("typing and effect guards restore the durable context they replace", () => 
   assert.match(node("Restore Debounced Context").parameters.jsCode, /Normalize Claimed Batch/);
   assert.match(node("Send Reply").parameters.jsonBody, /Merge QA With Routing Decision/);
   assert.match(node("Save Escalation Context").parameters.jsonBody, /Build Escalation Form/);
+});
+
+test("downstream escalation nodes can run from recovered batch context", () => {
+  for (const name of [
+    "Normalize Escalation Lookup",
+    "Reconcile Handoff Requirements",
+    "Build Escalation Form",
+    "Prepare Handoff",
+  ]) {
+    const source = node(name).parameters.jsCode;
+    assert.match(source, /Normalize Claimed Batch/, name);
+    assert.doesNotMatch(source, /^const ev = \$\('Extract Event'\)\.first\(\)\.json;/m, name);
+  }
+});
+
+test("handoff reconciliation rejects dynamic tournament placeholders and uses form-safe copy", () => {
+  assert.match(workflowSdk, /tournamentids/);
+  assert.match(workflowSdk, /I need a couple more details so our support team can investigate this\./);
+});
+
+test("PGVector retrieval uses the qualified ProGolf schema table", () => {
+  assert.match(workflowSdk, /"tableName": "progolf_support\.progolf_faq_vectors"/);
 });
 
 test("event extraction captures Chatwoot delivery and message identifiers", async () => {

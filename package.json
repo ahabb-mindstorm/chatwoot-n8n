@@ -11,6 +11,8 @@
     "rag:upsert-helpshift:dry": "node --env-file=.env scripts/upsert-helpshift-rag.mjs --dry-run",
     "rag:upsert-pgvector": "node --env-file=.env scripts/upsert-helpshift-pgvector.mjs",
     "rag:upsert-pgvector:dry": "node --env-file=.env scripts/upsert-helpshift-pgvector.mjs --dry-run",
+    "rag:import-helpshift-xhr": "node --env-file=.env scripts/import-helpshift-xhr-to-bot-rag.mjs",
+    "rag:import-helpshift-xhr:dry": "node --env-file=.env scripts/import-helpshift-xhr-to-bot-rag.mjs --dry-run",
     "workflow:patch-pgvector-support-state": "node --env-file=.env scripts/patch-pgvector-support-state.mjs",
     "workflow:patch-typing-indicators": "node --env-file=.env scripts/patch-typing-indicators.mjs",
     "workflow:patch-explicit-assignee": "node --env-file=.env scripts/patch-explicit-assignee.mjs",

@@ -50,28 +50,41 @@ export function normalizeN8nFaqEvidence(intermediateSteps) {
     if (seenObjects.has(parsed)) return;
     seenObjects.add(parsed);
 
+    // n8n AI tool wrappers: [{ response: [{ type: 'text', text: '<json doc>' }] }]
+    if (Object.hasOwn(parsed, 'response') && parsed.response !== parsed) {
+      visit(parsed.response);
+    }
+    if (
+      typeof parsed.text === 'string' &&
+      parsed.text.trim() &&
+      (parsed.type === 'text' || Object.hasOwn(parsed, 'type'))
+    ) {
+      visit(parsed.text);
+    }
+
     const document = n8nObject(parsed.document);
     const source = Object.keys(document).length > 0 ? document : parsed;
     const metadata = n8nObject(source.metadata || parsed.metadata);
+    // Prefer explicit chunk/doc ids over metadata.articleId (numeric article PK).
     const id = String(
       metadata.doc_id ||
         metadata.docId ||
         metadata.id ||
         metadata.faq_id ||
         metadata.faqId ||
-        metadata.articleId ||
         source.id ||
         parsed.id ||
+        metadata.articleId ||
         '',
     ).trim();
     const content = String(
       source.pageContent ||
         source.content ||
-        source.text ||
         source.answer ||
         parsed.pageContent ||
         parsed.content ||
-        parsed.text ||
+        parsed.answer ||
+        (parsed.type === 'text' ? '' : source.text || parsed.text) ||
         '',
     ).trim();
     if (id && content) {

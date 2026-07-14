@@ -16,7 +16,7 @@ function loadWorkflow() {
   return JSON.parse(raw);
 }
 
-async function runNormalizeLookup(workflow, extractEvent, agentOutput) {
+async function runNormalizeLookup(workflow, extractEvent, agentOutput, options = {}) {
   const node = workflow.nodes.find((candidate) => candidate.name === "Normalize Escalation Lookup");
   assert.ok(node, "Normalize Escalation Lookup node exists");
   const code = node.parameters?.jsCode;
@@ -27,7 +27,13 @@ async function runNormalizeLookup(workflow, extractEvent, agentOutput) {
       first: () => ({ json: { output: agentOutput } }),
     },
     $(name) {
+      if (name === "Normalize Claimed Batch") {
+        return { first: () => ({ json: extractEvent }) };
+      }
       if (name === "Extract Event") {
+        if (options.missingExtractEvent) {
+          throw new Error("Node 'Extract Event' hasn't been executed");
+        }
         return { first: () => ({ json: extractEvent }) };
       }
       return { first: () => ({ json: {} }) };
@@ -50,6 +56,23 @@ test("normalize remaps cheating tournament report from gameplay_tournament to pl
       reply: "",
       summary: "Player reports cheating in tournament FELIX_CUP_413413515",
     },
+  );
+
+  assert.equal(result.output.category, "player_report");
+});
+
+test("normalize uses recovered batch context when Extract Event did not run", async () => {
+  const workflow = loadWorkflow();
+  const result = await runNormalizeLookup(
+    workflow,
+    { content: "someone is cheating in my tournament" },
+    {
+      category: "gameplay_tournament",
+      reward_source: "",
+      reply: "",
+      summary: "Player needs help",
+    },
+    { missingExtractEvent: true },
   );
 
   assert.equal(result.output.category, "player_report");
@@ -104,12 +127,13 @@ test("normalize does not remap tournament reward issues to player_report", async
   assert.equal(result.output.reward_source, "tournament");
 });
 
-test("get escalation requirements sdk includes player_report template", () => {
-  const sdk = readFileSync(
-    join(rootDir, "workflows/get-escalation-requirements.sdk.js"),
+test("escalation resolver module supports player_report style templates", () => {
+  const source = readFileSync(
+    join(rootDir, "workflows/escalation-resolver.mjs"),
     "utf8",
   );
-  assert.match(sdk, /player_report/);
-  assert.match(sdk, /Describe what the other player did/);
-  assert.match(sdk, /validCategories.*player_report/);
+  assert.match(source, /resolveEscalation/);
+  assert.match(source, /escalationRequirements/);
+  assert.match(source, /required_fields/);
+  assert.match(source, /Load Bot Config/);
 });

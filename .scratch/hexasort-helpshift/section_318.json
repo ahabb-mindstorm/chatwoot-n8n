@@ -1,0 +1,83 @@
+{
+  "data": {
+    "id": "algames_section_20240129201331954-3b24ed705079e4d",
+    "title": "Billing",
+    "publish_id": "318",
+    "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/section/318/",
+    "faqs": [
+      {
+        "id": "algames_faq_20240130223635724-198b78576d4c77c",
+        "title": "How do I cancel my accidental purchase?",
+        "body": "<p>Android: If you are an Android user, kindly send us a screenshot of your Google Purchase Receipt. This will enable us to promptly investigate and process a refund.</p><p>iOS: If you are playing our game on an Apple device, please be informed that we are unable to process refunds directly, as the Apple Store manages all transactions. In this event, we kindly ask you to reach out to Apple Support for assistance in initiating the refund process.</p><p>To prevent unintentional or unauthorized future purchases, we recommend visiting the following links to learn how to set restrictions on your device:</p><ul><li><a href=\"https://support.google.com/googleplay/answer/1626831?hl=en\" target=\"_blank\" rel=\"nofollow\">Android</a></li><li><a href=\"https://support.apple.com/en-us/102470\" target=\"_blank\" rel=\"nofollow\">iOS</a></li> </ul><p>Implementing these restrictions add an extra layer of security and control over your in-app purchases, ensuring a more secure and enjoyable gaming experience.</p><p>We appreciate your understanding and cooperation in this matter. If you have any further questions or concerns, please feel free to reach out to our support team.</p>",
+        "description": "Android: If you are an Android user, kindly send us a screenshot of your Google Purchase Receipt. This will enable us to promptly investigat...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1676/",
+        "aria_label": "Article link to How do I cancel my accidental purchase? from section Billing link"
+      },
+      {
+        "id": "algames_faq_20240130223700336-b3ae1273cc3c42e",
+        "title": "I purchased a bundle/coins but didn't get them!",
+        "body": "<p>Please send us your User ID (found in the settings panel of the game) and include a screenshot of your purchase confirmation/receipt</p><p>We'll do our best to credit it to your account!</p>",
+        "description": "Please send us your User ID (found in the settings panel of the game) and include a screenshot of your purchase confirmation/receiptWe'll do...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1677/",
+        "aria_label": "Article link to I purchased a bundle/coins but didn't get them! from section Billing link"
+      },
+      {
+        "id": "algames_faq_20240810215849023-a11c6bdd55ee364",
+        "title": "1+1 Offer",
+        "body": "<ul><li>1+1 Offer is an in-app purchase that allows you to purchase coins and boosters</li><li>There are two kinds of rewards in a 1+1 Offer</li><li>If you buy the offer you get the other rewards for free</li><li>Each Month has a different theme for the 1+1 offer</li><li>You can find this on the main menu screen</li> </ul><p>&nbsp;</p>",
+        "description": "1+1 Offer is an in-app purchase that allows you to purchase coins and boostersThere are two kinds of rewards in a 1+1 OfferIf you buy the of...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2287/",
+        "aria_label": "Article link to 1+1 Offer from section Billing link"
+      },
+      {
+        "id": "algames_faq_20240810220114775-ff6ad334f6e70e5",
+        "title": "Chain Offer",
+        "body": "<ul><li>Chain offer is an in-app purchase which allows you purchase coins and boosters</li><li>The chain offer allows you to earn rewards just by playing the game</li><li>There are two types of offers<ul><li>Two Free Offers</li><li>One Paid Offer</li></ul> </li><li>The rewards are in a sequence with a total of three rewards visible on the screen at a time.</li><li>Both the Free Offers can be unlocked at first whereas the Paid offer is unlocked last and can only be purchased once both the other offers have been unlocked.</li> </ul><p>&nbsp;</p>",
+        "description": "Chain offer is an in-app purchase which allows you purchase coins and boostersThe chain offer allows you to earn rewards just by playing the...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2288/",
+        "aria_label": "Article link to Chain Offer from section Billing link"
+      },
+      {
+        "id": "algames_faq_20240810220225192-f8264f8b98d3ba8",
+        "title": "Starter Pack",
+        "body": "<ul><li>Starter Pack is an in-app purchase that allows you to purchase coins and boosters</li><li>Starter Pack allows you to kickstart your sorting journey by giving you some essentials for the way</li><li>This bundle is only offered once to each user for a limited amount of time.</li> </ul><p>&nbsp;</p>",
+        "description": "Starter Pack is an in-app purchase that allows you to purchase coins and boostersStarter Pack allows you to kickstart your sorting journey b...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2289/",
+        "aria_label": "Article link to Starter Pack from section Billing link"
+      },
+      {
+        "id": "algames_faq_20240810220431524-e316bd02b3b894d",
+        "title": "Coin Pack",
+        "body": "<ul><li>Coin pack is an in-app purchase that allows you purchase coins.</li><li>Coin Packs can be found in the shop at any time during your gameplay</li><li>There are 6 different coin packs with varying amounts of coins in each one of them</li> </ul><table> <thead><tr><th>Pack Name</th><th>Amount</th><th>Cost (USD)</th></tr> </thead><tbody><tr><td>Coin Pack 1</td><td>150</td><td>$1.99</td> </tr><tr><td>Coin Pack 2</td><td>700</td><td>$7.99</td> </tr><tr><td>Coin Pack 3</td><td>1600</td><td>$14.99</td> </tr><tr><td>Coin Pack 4</td><td>4000</td><td>$29.99</td> </tr><tr><td>Coin Pack 5</td><td>7000</td><td>$49.99</td> </tr><tr><td>Coin Pack 6</td><td>15000</td><td>$99.99</td></tr> </tbody> </table><p>&nbsp;</p><p>&nbsp;</p>",
+        "description": "Coin pack is an in-app purchase that allows you purchase coins.Coin Packs can be found in the shop at any time during your gameplayThere are...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2290/",
+        "aria_label": "Article link to Coin Pack from section Billing link"
+      },
+      {
+        "id": "algames_faq_20250505212049209-2adb072248594a2",
+        "title": "Safety Net Offer",
+        "body": "<p>The Safety Net offer is a limited-time deal available after the user fails a level. It can only be purchased once every 2 hours.<br><br><img src=\"https://media.discordapp.net/attachments/777781950495981578/1369061145205411921/IMG_5633.png?ex=681a7d0c&amp;is=68192b8c&amp;hm=f5332fc06bf66eb2daddcb5c5baf303b4a8ee606806e29fc590022295f06bef2&amp;=&amp;format=webp&amp;quality=lossless&amp;width=407&amp;height=881\" alt=\"Image\"></p>",
+        "description": "The Safety Net offer is a limited-time deal available after the user fails a level. It can only be purchased once every 2 hours.",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2811/",
+        "aria_label": "Article link to Safety Net Offer from section Billing link"
+      },
+      {
+        "id": "algames_faq_20260506182549676-8b60bf1dd1f2cfd",
+        "title": "What is the HexaSort Official Store?",
+        "body": "<p><strong>What is the HexaSort Official Store?</strong></p><ul><li>The HexaSort Official Store is a new way to buy coins, bundles, and offers directly inside the game.</li><li>It is powered by <strong>AppCharge</strong>, a secure web-based checkout, instead of the App Store or Google Play.</li><li>Buying through the Official Store unlocks <strong>better deals</strong>, including up to 10% off on eligible items.</li> </ul><p style=\"text-align: center;\"><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/3f039b60-f027-40cb-aeea-1ddbf9dc4160.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/3f039b60-f027-40cb-aeea-1ddbf9dc4160.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/3f039b60-f027-40cb-aeea-1ddbf9dc4160.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/3f039b60-f027-40cb-aeea-1ddbf9dc4160.gif 1.5x\" alt=\"\"> </a></p><h3>What is Buy Direct?</h3><ul><li><strong>Buy Direct</strong> is a toggle that lets you choose where your in-game purchases are processed.</li><li>When <strong>ON</strong>, your purchases go through the <strong>HexaSort Official Store</strong> (AppCharge).</li><li>When <strong>OFF</strong>, your purchases go through the regular <strong>App Store / Google Play</strong> flow.</li><li>The toggle is always optional \u2014 you can switch back at any time.</li> </ul><h3>Where do I find the Buy Direct toggle?</h3><ul><li>You can switch Buy Direct on or off from two places:<ul><li><strong>Settings menu</strong> \u2192 look for <strong>BUY DIRECT</strong> alongside Sounds, Notifications, Haptics, Game Boost, etc.</li><li>The <strong>Switch to AppCharge</strong> pop-up that appears when you are in the shop</li></ul> </li><li>Tap <strong>GOT IT!</strong> on the pop-up to apply your choice.</li> </ul><h3>How do I make a purchase through the Official Store?</h3><ul><li>Tap any offer in the Shop while Buy Direct is <strong>ON</strong> (or pick the Official Store option from the Switch to AppCharge pop-up).</li><li>You will be taken to the <strong>AppCharge checkout page</strong>, which shows:<ul><li>The item name and price</li><li>Your email</li><li>Your saved payment methods (Visa, Mastercard, etc.) or google pay/apple pay</li></ul> </li><li>Tap <strong>Pay</strong> to complete your purchase.</li><li>Once payment is processed, tap <strong>Return to game</strong> to head back to HexaSort with your reward delivered!</li> </ul><h3>Is paying through the Official Store safe?</h3><ul><li>Yes! <strong>AppCharge</strong> is a secure third-party payment processor that handles your card information.</li><li>HexaSort does not see or store your payment details.</li><li>You can find AppCharge's Privacy Policy, Refund Policy, and Support links at the bottom of the checkout page.</li> </ul><h3>I bought something through the Official Store but did not receive it?</h3><ul><li>If your purchase was completed but you have not received your reward, follow these steps:<ul><li>Tap on the <strong>Restore Purchases</strong> button found in the Settings menu.</li><li>If the Restore Purchases button does not fix the issue, please delete the game and reinstall it (without deleting your account).</li><li>In case that does not work either, please contact in-game chat support with the purchase receipt (found in your email) mentioning:<ul><li>Order Number</li><li>Date</li><li>Contents of Purchase</li></ul> </li></ul> </li> </ul><p></p><p></p><p></p><p style=\"text-align: left;\"></p><p></p>",
+        "description": "What is the HexaSort Official Store?The HexaSort Official Store is a new way to buy coins, bundles, and offers directly inside the game.It i...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/3451/",
+        "aria_label": "Article link to What is the HexaSort Official Store? from section Billing link"
+      },
+      {
+        "id": "algames_faq_20260508194545122-e2053311aee56ac",
+        "title": "What is the HexaSort Official Store?",
+        "body": "<p><strong>What is the HexaSort Official Store?</strong></p><ul><li>The HexaSort Official Store is a new way to buy coins, bundles, and offers directly inside the game.</li><li>It is powered by <strong>AppCharge</strong>, a secure web-based checkout, instead of the App Store or Google Play.</li><li>Buying through the Official Store unlocks <strong>better deals</strong>, including up to 10% off on eligible items.</li> </ul><p><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/6f0418bb-259b-4de9-9c28-7795120d525e.gif\"></p><h3>What is Buy Direct?</h3><ul><li><strong>Buy Direct</strong> is a toggle that lets you choose where your in-game purchases are processed.</li><li>When <strong>ON</strong>, your purchases go through the <strong>HexaSort Official Store</strong> (AppCharge).</li><li>When <strong>OFF</strong>, your purchases go through the regular <strong>App Store / Google Play</strong> flow.</li><li>The toggle is always optional \u2014 you can switch back at any time.</li> </ul><h3>Where do I find the Buy Direct toggle?</h3><ul><li>You can switch Buy Direct on or off from two places:<ul><li><strong>Settings menu</strong> \u2192 look for <strong>BUY DIRECT</strong> alongside Sounds, Notifications, Haptics, Game Boost, etc.</li><li>The <strong>Switch to AppCharge</strong> pop-up that appears when you are in the shop</li></ul> </li><li>Tap <strong>GOT IT!</strong> on the pop-up to apply your choice.</li> </ul><h3>How do I make a purchase through the Official Store?</h3><ul><li>Tap any offer in the Shop while Buy Direct is <strong>ON</strong> (or pick the Official Store option from the Switch to AppCharge pop-up).</li><li>You will be taken to the <strong>AppCharge checkout page</strong>, which shows:<ul><li>The item name and price</li><li>Your email</li><li>Your saved payment methods (Visa, Mastercard, etc.) or google pay/apple pay</li></ul> </li><li>Tap <strong>Pay</strong> to complete your purchase.</li><li>Once payment is processed, tap <strong>Return to game</strong> to head back to HexaSort with your reward delivered!</li> </ul><h3>Is paying through the Official Store safe?</h3><ul><li>Yes! <strong>AppCharge</strong> is a secure third-party payment processor that handles your card information.</li><li>HexaSort does not see or store your payment details.</li><li>You can find AppCharge's Privacy Policy, Refund Policy, and Support links at the bottom of the checkout page.</li> </ul><h3>I bought something through the Official Store but did not receive it?</h3><ul><li>If your purchase was completed but you have not received your reward, follow these steps:<ul><li>Tap on the <strong>Restore Purchases</strong> button found in the Settings menu.</li><li>If the Restore Purchases button does not fix the issue, please delete the game and reinstall it (without deleting your account).<ul><li>Disclaimer: Please connect your account to Facebook/google and apple before deleting your account</li></ul> </li><li>In case that does not work either, please contact in-game chat support with the purchase receipt (found in your email) mentioning:<ul><li>Order Number</li><li>Date</li><li>Contents of Purchase</li></ul> </li></ul> </li> </ul><p><strong>Why don't I see the Buy Direct toggle?</strong></p><ul><li>The Buy Direct toggle is currently available to select iOS and Android users in the US on App Version 5.4.10 and Above</li><li>This feature will be released soon to all users in the US</li><li>Please keep an eye out here for updates on availability!</li> </ul><p></p><p></p>",
+        "description": "What is the HexaSort Official Store?The HexaSort Official Store is a new way to buy coins, bundles, and offers directly inside the game.It i...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/3453/",
+        "aria_label": "Article link to What is the HexaSort Official Store? from section Billing link"
+      }
+    ],
+    "icon": "\ud83d\udcb0"
+  }
+}

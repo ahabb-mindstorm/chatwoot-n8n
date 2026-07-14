@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Error! 404</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <link href="/static/css/error-pages.css" media="screen, projection" rel="stylesheet" type="text/css" />
+    <link rel="shortcut icon" href="/static/images/favicon.ico" />
+  </head>
+  <body>
+    <div class="doc">
+      <div class="contentWrapper">
+        <img id="errorImg" src="/static/images/error/404.png"/>
+      </div>
+      <div class="tint">
+        <div class="contentWrapper">
+          <h1 class="title">404 - Page not found</h1>
+          <h4>Sorry, we could not find the page you were looking for.</h4>
+          <div class="empButton">
+            <a href="/" class="button" id="back-link"> &laquo; back home</a>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          if (window.location.pathname === "/") {
+            document.getElementById ("back-link").href = "https://helpshift.com";
+          }
+        }) ();
+      </script>
+  <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b1dd94783f9089',t:'MTc4NDA0NjEzOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

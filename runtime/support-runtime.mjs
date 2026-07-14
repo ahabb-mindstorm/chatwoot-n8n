@@ -329,8 +329,7 @@ function authorizeProposal(
         return (
           !evidenceIds.includes(evidenceId) ||
           !quote ||
-          !includesNormalized(evidenceText, quote) ||
-          !includesNormalized(reply, quote)
+          !includesNormalized(evidenceText, quote)
         );
       })
     ) {
@@ -338,6 +337,14 @@ function authorizeProposal(
         'Self-service reply is not grounded in cited FAQ text',
       );
     }
+    const citedEvidenceText = evidenceIds
+      .map((evidenceId) => {
+        const evidence = availableEvidence.get(evidenceId);
+        return String(
+          evidence?.content || evidence?.text || evidence?.answer || '',
+        );
+      })
+      .join('\n');
     const replySentences = reply
       .split(/(?<=[.!?])\s+/)
       .map((sentence) => sentence.trim())
@@ -345,8 +352,10 @@ function authorizeProposal(
     if (
       replySentences.some(
         (sentence) =>
-          !groundingQuotes.some((grounding) =>
-            includesNormalized(sentence, grounding.quote),
+          !isSelfServeSentenceGrounded(
+            sentence,
+            citedEvidenceText,
+            groundingQuotes,
           ),
       )
     ) {
@@ -678,6 +687,72 @@ function includesNormalized(text, expected) {
       .replace(/\s+/g, ' ')
       .trim();
   return normalize(text).includes(normalize(expected));
+}
+
+function normalizeComparableText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function contentWords(value) {
+  return [
+    ...new Set(
+      normalizeComparableText(value)
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word.length > 3),
+    ),
+  ];
+}
+
+function contentWordOverlapRatio(sentence, evidenceText) {
+  const words = contentWords(sentence);
+  if (words.length === 0) return 1;
+  const blob = normalizeComparableText(evidenceText);
+  const hits = words.filter((word) => blob.includes(word)).length;
+  return hits / words.length;
+}
+
+function isSoftClosingSentence(sentence) {
+  return /\b(let me know|hope (this|that) helps|feel free|reach out|still need help|anything else)\b/i.test(
+    sentence,
+  );
+}
+
+function isSelfServeSentenceGrounded(sentence, evidenceText, groundingQuotes) {
+  const cleaned = normalizeComparableText(sentence);
+  if (cleaned.length < 24) return true;
+
+  if (includesNormalized(evidenceText, cleaned)) return true;
+
+  if (
+    groundingQuotes.some((grounding) => {
+      const quote = String(grounding?.quote || '').trim();
+      return (
+        quote &&
+        (includesNormalized(cleaned, quote) || includesNormalized(quote, cleaned))
+      );
+    })
+  ) {
+    return true;
+  }
+
+  if (contentWordOverlapRatio(cleaned, evidenceText) >= 0.8) return true;
+
+  // Allow brief non-procedural closings ("please let me know") without new steps.
+  if (isSoftClosingSentence(cleaned)) {
+    const procedural =
+      cleaned.match(
+        /\b(delete|uninstall|reinstall|reset|clear|restart|update|download|refund|purchase|send|click|tap|force.?quit)\b/gi,
+      ) || [];
+    return procedural.every((verb) =>
+      includesNormalized(evidenceText, verb.toLowerCase()),
+    );
+  }
+
+  return false;
 }
 
 function invalidRuntimeProposal(message) {

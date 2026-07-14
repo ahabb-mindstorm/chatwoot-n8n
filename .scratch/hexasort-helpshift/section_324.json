@@ -1,0 +1,50 @@
+{
+  "data": {
+    "id": "algames_section_20240130224501661-7ba369430be4909",
+    "title": "Advertisements ",
+    "publish_id": "324",
+    "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/section/324/",
+    "faqs": [
+      {
+        "id": "algames_faq_20240130224841931-989d0df0962882c",
+        "title": "Can I Remove Ads/No Ads in the game?",
+        "body": "<p>It's possible to disable full screen ad interruptions during gameplay (also known as interstitial ads) with a No Ads item! If you haven't purchased this item in the past, you can purchase this consumable item to disable interstitial ads for 30 days. If your time runs out, you can purchase the item again to disable interstitial ads for another 30 days.</p><p>Please note that banner ads and rewarded videos cannot be removed. You will always have the option to watch advertisements to receive extra rewards!</p><p>The Remove-Ads can be found in your main menu screen and the Remove Ads bundle in the store.&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/6df53667-d1eb-4c7e-94b7-0af22acd8279.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><br><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/6df53667-d1eb-4c7e-94b7-0af22acd8279.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/6df53667-d1eb-4c7e-94b7-0af22acd8279-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/6df53667-d1eb-4c7e-94b7-0af22acd8279-2t.jpg 1.5x\" alt=\"\"></a></p><p>&nbsp;</p><p><strong>Update:</strong></p><ul><li>Before Version 2.0.58 - No Ads is permanent</li><li>Version 2.0.58 - Before Version 4.8.30 - No Ads is a 30 days consumable</li><li>Version 4.8.30 - Present - No Ads is permanent</li> </ul><p>&nbsp;</p><p><strong>Notice:</strong></p><ul><li>Purchased permanent No Ads would remain intact even with updates.</li><li>Purchased 30 days No Ads would not transition to a permanent No Ads when changes occur.</li>\n</ul>",
+        "description": "It's possible to disable full screen ad interruptions during gameplay (also known as interstitial ads) with a No Ads item! If you haven't pu...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1681/",
+        "aria_label": "Article link to Can I Remove Ads/No Ads in the game? from section Advertisements  link"
+      },
+      {
+        "id": "algames_faq_20240130223456671-0aa14995c35702e",
+        "title": "I have to quit my game, why do the ads show a black screen?",
+        "body": "<p>We are currently trying to identify the advertisers that are causing this issue in our app.</p><p>You can help us report this promptly by taking a screenshot of the ad once the store link/app name appears on the screen. This effort of yours can help us identify and immediately report the advertiser and have it permanently blocked from the game.</p>",
+        "description": "We are currently trying to identify the advertisers that are causing this issue in our app.You can help us report this promptly by taking a ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1673/",
+        "aria_label": "Article link to I have to quit my game, why do the ads show a black screen? from section Advertisements  link"
+      },
+      {
+        "id": "algames_faq_20240229204901749-c6b48bbbef8121b",
+        "title": "I keep getting inappropriate ads, how do I report AD?",
+        "body": "<p>We are actively working to ban such advertisers from our game. Here\u2019s how you can help us speed up this process and ensure more player-friendly ads. When a distasteful ad appears:</p><p>1.&nbsp; Take a screenshot of the AD that you want to report<br>2.&nbsp; While an ad is playing, flip your device screen down twice<br>3.&nbsp; A logo will appear on the right side of the screen<br>4.&nbsp; Press on the logo to open the ads screen and identify the ad format that just played along with how long the ad played.<br>5.&nbsp; When you press on the ad you want to report you can press share and copy it and send it to us using the in-game chat support</p><p>The visual identification helps us promptly identify the advertiser and block them permanently without any delay.</p>",
+        "description": "We are actively working to ban such advertisers from our game. Here\u2019s how you can help us speed up this process and ensure more player-frien...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1829/",
+        "aria_label": "Article link to I keep getting inappropriate ads, how do I report AD? from section Advertisements  link"
+      },
+      {
+        "id": "algames_faq_20240810221254896-836ac082ac4a6b9",
+        "title": "I am unable to close an Ad",
+        "body": "<ul><li>You can skip interstitial ads only however you cannot skip rewarded ads.</li><li>In case an ad has a fake cross, kindly follow the process to report ads and take a screenshot to us so that we can promptly look into them and block such advertisers.</li><li>Banner ads cannot be closed as they are always present at the bottom of your screen. You can remove them by purchasing the No-Ads IAP.</li> </ul><p>&nbsp;</p>",
+        "description": "You can skip interstitial ads only however you cannot skip rewarded ads.In case an ad has a fake cross, kindly follow the process to report ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2292/",
+        "aria_label": "Article link to I am unable to close an Ad from section Advertisements  link"
+      },
+      {
+        "id": "algames_faq_20240810221421046-50517bd493e9913",
+        "title": "I purchased No-Ads but I am still getting ads",
+        "body": "<ul><li><p>If you are still getting ads even after purchasing no-ads try these steps:</p><ol><li>Tap on the Restore Purchases Button</li><li>Close and Restart your App<ul><li>Make sure you are connected to the internet</li></ul> </li><li>Delete and Reinstall your app without deleting your account</li> </ol><p>If none of these fix the issue, please send us a purchase receipt using the in-game chat support, and let us handle it for you. Please make sure the receipt mentions the order number and other details about your purchase.</p></li> </ul><p>&nbsp;</p>",
+        "description": "If you are still getting ads even after purchasing no-ads try these steps:Tap on the Restore Purchases ButtonClose and Restart your AppMake ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2293/",
+        "aria_label": "Article link to I purchased No-Ads but I am still getting ads from section Advertisements  link"
+      }
+    ]
+  }
+}

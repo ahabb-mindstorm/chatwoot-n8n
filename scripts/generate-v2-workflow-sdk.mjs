@@ -5,7 +5,7 @@ import { patchWorkflow } from "./patch-typing-indicators.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
-const inputPath = process.argv[2] || join(root, "tests/fixtures/progolf-support-bot-v2-pre-typing.json");
+const inputPath = process.argv[2] || join(root, "workflows/progolf-support-bot-v2-pgvector.json");
 const outputPath = process.argv[3] || join(root, "workflows/progolf-support-bot-v2-pgvector.sdk.js");
 
 const sourceWorkflow = JSON.parse(readFileSync(inputPath, "utf8"));
@@ -45,7 +45,7 @@ function nodeFactory(type) {
   if (type.includes("outputParserStructured")) return "outputParser";
   if (type.includes("embeddingsOpenAi")) return "embeddings";
   if (type.includes("memoryPostgresChat")) return "memory";
-  if (type.includes("toolWorkflow")) return "tool";
+  if (type.includes("toolWorkflow") || type.includes("toolCode")) return "tool";
   return "node";
 }
 
@@ -172,6 +172,14 @@ for (const item of nodeOrder) {
   lines.push(`    position: ${serializeValue(item.position || [0, 0])},`);
   if (item.onError) lines.push(`    onError: ${escapeString(item.onError)},`);
   if (item.alwaysOutputData) lines.push("    alwaysOutputData: true,");
+  if (item.retryOnFail && (item.maxTries !== undefined || item.waitBetweenTries !== undefined)) {
+    lines.push("    retryOnFail: {");
+    if (item.maxTries !== undefined) lines.push(`      maxTries: ${item.maxTries},`);
+    if (item.waitBetweenTries !== undefined) lines.push(`      waitBetweenTries: ${item.waitBetweenTries},`);
+    lines.push("    },");
+  } else if (item.retryOnFail) {
+    lines.push("    retryOnFail: true,");
+  }
   if (item.notesInFlow) lines.push("    notesInFlow: true,");
   if (item.notes) lines.push(`    notes: ${escapeString(item.notes)},`);
   if (item.id) lines.push(`    id: ${escapeString(item.id)},`);

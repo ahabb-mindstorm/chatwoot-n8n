@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": "algames_section_20240129201331988-78f8b92e287f50f",
+    "title": "Settings",
+    "publish_id": "319",
+    "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/section/319/",
+    "faqs": [
+      {
+        "id": "algames_faq_20240130223734325-b24388e019f567f",
+        "title": "I'm Colorblind and have difficulty sorting the colors.",
+        "body": "<p>You can play our colorblind mode that's designed to ease the color difficulty. Please follow these simple steps:</p><p>1- Head to the main menu of the game.</p><p>2- Tap on the settings icon at the top right corner of the screen.</p><p>3- In the settings panel, you will see the colorblind toggle button, turn it on.</p>",
+        "description": "You can play our colorblind mode that's designed to ease the color difficulty. Please follow these simple steps:1- Head to the main menu of ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1678/",
+        "aria_label": "Article link to I'm Colorblind and have difficulty sorting the colors. from section Settings link"
+      }
+    ],
+    "icon": "\u2699"
+  }
+}

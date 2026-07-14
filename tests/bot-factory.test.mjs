@@ -507,9 +507,15 @@ test('shared support runtime uses policy-driven taxonomy, not ProGolf reward heu
   const authorize = runtime.nodes.find(
     (node) => node.name === 'Merge QA With Routing Decision',
   );
+  const faqSearch = runtime.nodes.find((node) => node.name === 'Search FAQ Knowledge Base');
   const authorizeCode = String(authorize?.parameters?.jsCode || '');
   const schema = String(parser?.parameters?.inputSchema || '');
 
+  assert.equal(
+    faqSearch?.parameters?.options?.columnNames?.values?.contentColumnName,
+    'content',
+  );
+  assert.equal(faqSearch?.parameters?.includeDocumentMetadata, true);
   assert.match(authorizeCode, /botRuntimeConfig/);
   assert.match(authorizeCode, /rewardSources/);
   assert.match(authorizeCode, /Accept Runtime Payload/);

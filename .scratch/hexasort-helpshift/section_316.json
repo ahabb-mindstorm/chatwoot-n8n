@@ -1,0 +1,339 @@
+{
+  "data": {
+    "id": "algames_section_20240129201331904-e1ece6570e036f6",
+    "title": "Gameplay",
+    "publish_id": "316",
+    "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/section/316/",
+    "faqs": [
+      {
+        "id": "algames_faq_20250227030002450-e9bb5e61bc24a5b",
+        "title": "Terms of Use and Privacy Policy",
+        "body": "<p>To access our Terms of Use and Privacy Policy, you can visit the links below:</p><ul><li>Terms of Use:&nbsp;<a href=\"https://lionstudios.cc/terms/\" target=\"_blank\" rel=\"nofollow\">https://lionstudios.cc/terms/</a></li><li>Privacy Policy:&nbsp;<a href=\"https://lionstudios.cc/privacy/\" target=\"_blank\" rel=\"nofollow\">https://lionstudios.cc/privacy/</a></li>\n</ul>",
+        "description": "To access our Terms of Use and Privacy Policy, you can visit the links below:Terms of Use:&nbsp;https://lionstudios.cc/terms/Privacy Policy:...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2688/",
+        "aria_label": "Article link to Terms of Use and Privacy Policy from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240130214750199-7db0dcb3f9e9e65",
+        "title": "How do I play Hexa Sort?",
+        "body": "<ul><li>In order to complete a level, you need to place tiles to sort and merge them</li><li>You have to place similar colored hex tiles next to each other on the board to sort and stack them.</li><li>Once you have 10 tiles in a stack the stack will merge and pop</li><li>Each level gives you a new goal to achieve.</li><li>You must collect the given number of hex tiles to pass the level.</li><li>Place the same-colored tiles together and watch them stack, sort, and merge satisfyingly. The collected tiles will allow you to color &amp; build a beautiful world after completing each level.</li> </ul><p></p>",
+        "description": "In order to complete a level, you need to place tiles to sort and merge themYou have to place similar colored hex tiles next to each other o...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1664/",
+        "aria_label": "Article link to How do I play Hexa Sort? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240229204639742-2ea8c76fbe19a0b",
+        "title": "How do the stacks/tiles merge?",
+        "body": "<ul><li>Once you place a similar colored stack next to each other, the new stack placed by the user will pull the tiles of the similar colored tiles from the previously placed stack.</li><li>You need to place at least 10 tiles in a stack for it to merge.</li><li>Even in a 3-chain (bridge) scenario, suppose you have 2 red stacks with an empty slot between them, and you put another red hex stack in that slot, the last placed hex tile on the board will pull the tiles from the stack that is already placed.</li> </ul><p></p>",
+        "description": "Once you place a similar colored stack next to each other, the new stack placed by the user will pull the tiles of the similar colored tiles...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1828/",
+        "aria_label": "Article link to How do the stacks/tiles merge? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240130221748545-6f3ac7e18b04315",
+        "title": "What is Streak Rush?",
+        "body": "<p>After you complete level 5, you are invited to join the Hexa Blaze Streak. The goal is to complete a certain number of levels without failing and earning rewards for those streaks. Don't worry if you lose your streak, you will not lose your entire progress. You will start from the last checkpoint.</p>",
+        "description": "After you complete level 5, you are invited to join the Hexa Blaze Streak. The goal is to complete a certain number of levels without failin...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1669/",
+        "aria_label": "Article link to What is Streak Rush? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240130221803904-a256496c0b6e264",
+        "title": "What is the league system?",
+        "body": "<p>You can start competing in the Leagues after passing level 5. Continue to progress through the levels to increase your standing on the leaderboard. Keep track of your position at each level completion screen and aim for one of the top positions to get an exciting reward. You will get a reward for moving on to the next League even if you're not in the top three.</p>",
+        "description": "You can start competing in the Leagues after passing level 5. Continue to progress through the levels to increase your standing on the leade...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1670/",
+        "aria_label": "Article link to What is the league system? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240130221821714-4926e9e7d24cb6d",
+        "title": "Why do my points on the Leaderboard keep decreasing?",
+        "body": "<p>In order to maintain your rank, come back and play levels each day. Remember someone in the world is always sorting the hex tiles, so make sure to continue beating them by playing every day.</p>",
+        "description": "In order to maintain your rank, come back and play levels each day. Remember someone in the world is always sorting the hex tiles, so make s...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1671/",
+        "aria_label": "Article link to Why do my points on the Leaderboard keep decreasing? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240130223342865-3d68c58db58ec68",
+        "title": "What is the Race Event?",
+        "body": "<h3>What is the Hexa Grand Prix?</h3><ul><li>Hexa Grand Prix is a timed event that happens every Mon, Wed, Fri, Sun</li><li>You can compete against four other players to complete 5 levels in 2 hours</li> </ul><h3>How to play the Hexa Grand Prix</h3><ul><li>You can join the Hexa Grand Prix after completing level 10</li><li>Every Monday, Wednesday, Friday, and Sunday you will be shown an invite to join the race</li><li>By clicking join you will be taken to the race event screen which you can access later from the main menu</li><li>Be in the top 3 and claim a free reward chest!</li> </ul><p>&nbsp;<a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7b782f7f-41bd-433f-b1a4-376f175a41ae.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7b782f7f-41bd-433f-b1a4-376f175a41ae.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7b782f7f-41bd-433f-b1a4-376f175a41ae-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/7b782f7f-41bd-433f-b1a4-376f175a41ae-2t.png 1.5x\" alt=\"\"> </a>&nbsp;</p>",
+        "description": "What is the Hexa Grand Prix?Hexa Grand Prix is a timed event that happens every Mon, Wed, Fri, SunYou can compete against four other players...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1672/",
+        "aria_label": "Article link to What is the Race Event? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240302020144522-40d08914f2401d9",
+        "title": "Out of Space",
+        "body": "<p><span style=\"color: #000000; background-color: transparent;\">If you are unable to complete a level and run out of spaces on the board, the Out of Space pop up will appear on your screen. You can choose to return to the level and continue playing by using the <strong>Play On</strong> option.</span></p><p><span style=\"color: #000000; background-color: transparent;\"><strong>Play On:</strong></span><span style=\"color: #000000; background-color: transparent;\"> Use coins to remove four stacks and continue playing.</span><span style=\"color: #000000; background-color: transparent;\">&nbsp;</span></p><p><span style=\"color: #000000; background-color: transparent;\">You can also restart the level by using lives.<br></span></p><p><span style=\"color: #000000; background-color: transparent;\"> </span></p>",
+        "description": "If you are unable to complete a level and run out of spaces on the board, the Out of Space pop up will appear on your screen. You can choose...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1834/",
+        "aria_label": "Article link to Out of Space from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240302022246097-0989593c0f2f2a6",
+        "title": "Winner's Wheel and Super Winner's Wheel",
+        "body": "<p><span style=\"color: #000000; background-color: transparent;\"><span style=\"color: #000000; background-color: transparent;\"><strong>Complete levels to unlock the Spin Wheel for rewards!</strong> </span></span></p><p><span style=\"color: #000000; background-color: transparent;\"><span style=\"color: #000000; background-color: transparent;\">Tap on the icon to view the Winner\u2019s Wheel - here you can see the available rewards, as well as the amount of levels to complete. Once you\u2019ve done this, you\u2019ll unlock a free spin! Your reward is added to your account immediately.</span><span style=\"color: #000000; background-color: transparent;\"><br></span><span style=\"color: #000000; background-color: transparent;\"><br></span><span style=\"color: #000000; background-color: transparent;\">Using the free spin on the Winner\u2019s Wheel will also unlock the Super Winner\u2019s Wheel Offer - this is a separate Spin Wheel that has higher rewards available.</span></span></p><p><span style=\"color: #000000; background-color: transparent;\"><span style=\"color: #000000; background-color: transparent;\">&nbsp;</span><span style=\"color: #000000; background-color: transparent;\"><br></span><span style=\"color: #000000; background-color: transparent;\"> <a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/61df1bee-ba09-4417-bf04-38e3d317800a.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/61df1bee-ba09-4417-bf04-38e3d317800a.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/61df1bee-ba09-4417-bf04-38e3d317800a-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/61df1bee-ba09-4417-bf04-38e3d317800a-2t.jpg 1.5x\" alt=\"\"></a> </span></span></p><p><span style=\"color: #000000; background-color: transparent;\"><span style=\"color: #000000; background-color: transparent;\">Please note that unlocking the Super Winner\u2019s Wheel&nbsp;<strong>will not</strong> provide a free spin. To be able to spin the Super Winner\u2019s Wheel, you will have to tap on the button and make an in-app purchase.&nbsp; </span></span></p>",
+        "description": "Complete levels to unlock the Spin Wheel for rewards! Tap on the icon to view the Winner\u2019s Wheel - here you can see the available rewards, a...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1835/",
+        "aria_label": "Article link to Winner's Wheel and Super Winner's Wheel from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240312000105943-b16087e32335e83",
+        "title": "What is Battle Pass?",
+        "body": "<p>Battle Pass is a limited-timed feature where players can obtain rewards by completing levels and collecting special items. A new theme is released every month for the Battle Pass Event.</p><ul><li>It will start at the beginning of the month and ends when the month will end.</li> </ul><p>Requirements: You need to pass Level 14 to see this feature. This is available for both Android and iOS.</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/47474868-f59a-477a-a08d-38ac58a28bcb.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/47474868-f59a-477a-a08d-38ac58a28bcb.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/47474868-f59a-477a-a08d-38ac58a28bcb-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/47474868-f59a-477a-a08d-38ac58a28bcb-2t.png 1.5x\" alt=\"\"></a></p><p>In order to unlock extra rewards under&nbsp;<strong><em>Gold Pass,&nbsp;</em></strong>you will need to purchase the&nbsp;<em>pass.&nbsp;</em></p><ul><li><strong>Gold Pass:&nbsp;</strong>Unlocks premium rewards and Golden profile picture frame.</li><li><strong>Ultimate Gold Pass:&nbsp;</strong>Unlocks premium rewards, Golden profile picture frame and increases your lives from 5 to 8<ul><li><strong>Note:&nbsp;</strong>You <strong>will not&nbsp;</strong>automatically receive the rewards under&nbsp;<strong>Gold Pass&nbsp;</strong>upon purchase. You need to complete the required levels in order to claim the rewards.&nbsp;</li></ul> </li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/5649e172-b2df-41fc-bdeb-27a0210de9ee.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/5649e172-b2df-41fc-bdeb-27a0210de9ee.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/5649e172-b2df-41fc-bdeb-27a0210de9ee-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/5649e172-b2df-41fc-bdeb-27a0210de9ee-2t.jpg 1.5x\" alt=\"\"> </a></p><p>&nbsp;</p>",
+        "description": "Battle Pass is a limited-timed feature where players can obtain rewards by completing levels and collecting special items. A new theme is re...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1855/",
+        "aria_label": "Article link to What is Battle Pass? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20250624174544208-3651f8ee04dadab",
+        "title": "Sticker Hunt",
+        "body": "<p>Sticker Hunt unlocks once you reach level 71.</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/1233b61b-de2f-4b15-b03e-3e6d45af10b5.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/1233b61b-de2f-4b15-b03e-3e6d45af10b5.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/1233b61b-de2f-4b15-b03e-3e6d45af10b5.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/1233b61b-de2f-4b15-b03e-3e6d45af10b5.gif 1.5x\" alt=\"Sticker Hunt\"> </a></p><ul><li>Play levels to collect stickers and reveal items on the board.</li><li>Tap on the board to uncover cells and discover sticker pieces.</li><li>Each item requires up to 3 stickers to be fully revealed.</li><li>Once an item is complete, it gets added to your sticker page.</li><li>Completing a page rewards you with exciting in-game gifts.</li><li>Finish the entire sticker book to unlock a <strong>mega reward</strong>!</li> </ul><p></p>",
+        "description": "Sticker Hunt unlocks once you reach level 71. Play levels to collect stickers and reveal items on the board.Tap on the board to uncover cell...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2848/",
+        "aria_label": "Article link to Sticker Hunt from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240326002411569-7b7e9feb93d00e6",
+        "title": "What is Pinata Smash?",
+        "body": "<ul><li>Pi\u00f1ata Party is a timed in game event that unlocks after completing level 11.</li><li>Your main goal is to complete levels to break the pi\u00f1ata and earn rewards. For example: If you are on level 12, you need to finish 6 more levels to break the first pi\u00f1ata and earn rewards.</li><li>It remains active for 24 hours after joining the event. The event appears on Tuesday, Thursday, and Saturday. It activates immediately after the Race Event Time expires.</li><li>If you complete the race event then, the pi\u00f1ata event also appears.</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/465434a0-8600-40f5-8d98-45ac06c7da8d.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/465434a0-8600-40f5-8d98-45ac06c7da8d.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/465434a0-8600-40f5-8d98-45ac06c7da8d.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/465434a0-8600-40f5-8d98-45ac06c7da8d.gif 1.5x\" alt=\"\"> </a></p>",
+        "description": "Pi\u00f1ata Party is a timed in game event that unlocks after completing level 11.Your main goal is to complete levels to break the pi\u00f1ata and ea...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1887/",
+        "aria_label": "Article link to What is Pinata Smash? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240326004748434-d67f86bb2504b0e",
+        "title": "What is the Subscription Offer?",
+        "body": "<ul><li>The Daily Reward subscription is a special game feature accessible after completing level 15.</li><li><strong>Duration</strong>:It remains active for 30 days from the date of subscription.</li><li>This offer provides our players with 40 coins per day, making it a 7x value-added purchase.</li> </ul><p style=\"text-align: center;\"><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a0bb37e4-a83d-4d40-acf1-420225fb2937.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a0bb37e4-a83d-4d40-acf1-420225fb2937.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a0bb37e4-a83d-4d40-acf1-420225fb2937-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/a0bb37e4-a83d-4d40-acf1-420225fb2937-2t.jpg 1.5x\" alt=\"\"> </a></p>",
+        "description": "The Daily Reward subscription is a special game feature accessible after completing level 15.Duration:It remains active for 30 days from the...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1889/",
+        "aria_label": "Article link to What is the Subscription Offer? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240326005800847-0d6604274bd96f5",
+        "title": "What is the News Section?",
+        "body": "<p>Keep yourself up to date with all the happenings in Hexa Sort with our News Section. Anytime there\u2019s a new announcement related to upcoming events, offers or features, the news icon will appear on the main menu right at the top corner of the Play Button.</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f5605ee5-bea1-4b42-9233-4b665f95f2b7.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f5605ee5-bea1-4b42-9233-4b665f95f2b7.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f5605ee5-bea1-4b42-9233-4b665f95f2b7-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/f5605ee5-bea1-4b42-9233-4b665f95f2b7-2t.jpg 1.5x\" alt=\"\"> </a></p>",
+        "description": "Keep yourself up to date with all the happenings in Hexa Sort with our News Section. Anytime there\u2019s a new announcement related to upcoming ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1890/",
+        "aria_label": "Article link to What is the News Section? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240503003242171-8690fce665d057b",
+        "title": "Bonus Bank Rewards",
+        "body": "<p>Once you complete the Battle Pass Event by reaching the last checkpoint, your Bonus Bank will show 720 coins. You will be able to collect the coins in your Bonus Bank by completing levels, and once the event ends which is the last day of the month you\u2019ll get to open and claim all the collected coins.</p><p>You\u2019ll need to <strong>purchase </strong>the Gold Pass or the Ultimate Gold Pass to claim the Bonus Bank coins.</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a741c584-bf21-4509-b15c-060aaa6a0de8.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a741c584-bf21-4509-b15c-060aaa6a0de8.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/a741c584-bf21-4509-b15c-060aaa6a0de8-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/a741c584-bf21-4509-b15c-060aaa6a0de8-2t.png 1.5x\" alt=\"Bonus Bank\"> </a></p>",
+        "description": "Once you complete the Battle Pass Event by reaching the last checkpoint, your Bonus Bank will show 720 coins. You will be able to collect th...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/1971/",
+        "aria_label": "Article link to Bonus Bank Rewards from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240615003112004-45b88cbf2bc2f7b",
+        "title": "Leaderboard",
+        "body": "<h3><span style=\"color: rgba(193, 76, 138, 1);\">What is the Leaderboard </span></h3><ul><li>A leaderboard is a rank system in Hexa Sort, allowing players to compete against each other.</li><li>Rise through the ranks and win prizes.</li><li>The Leaderboard is unlocked after you clear level 5.</li><li>There are two types of Leaderboards:<ul><li>Leagues</li><li>Global</li></ul> </li> </ul><h3><span style=\"color: rgba(193, 76, 138, 1);\">What are the Leagues</span></h3><p><span style=\"color: rgba(55, 53, 47, 1);\">League is a type of timed event that resets every week, from the day that you download and start playing the game.</span></p><p><span style=\"color: rgba(55, 53, 47, 1);\">&nbsp;<a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b663cddf-8546-46b3-9c3e-276f3c7c03e8.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b663cddf-8546-46b3-9c3e-276f3c7c03e8.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b663cddf-8546-46b3-9c3e-276f3c7c03e8.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/b663cddf-8546-46b3-9c3e-276f3c7c03e8.gif 1.5x\" alt=\"\"></a> </span></p><h3><span style=\"color: rgba(55, 53, 47, 1);\"><span style=\"color: rgba(193, 76, 138, 1);\">How do Leagues work</span>&nbsp;</span></h3><ul><li>Leagues all have a seven-day timer meaning you not only have to play to reach the top but also you have to fight to maintain your position and earn podium prizes!</li><li>There is a total of 6 Leagues that you can compete in:<ul><li>Bronze</li><li>Mercury League</li><li>Golden League</li><li>Scarlet League</li><li>Sapphire League</li><li>Diamond</li></ul> </li><li>At each level that you clear, you can earn trophies to increase your position in the league leaderboard.</li><li>There are 3 Zones in the Leaderboard:<ul><li><strong>Promotion Zone</strong> will let you be promoted to the next league with a league promotion reward.</li><li><strong>Persisting Zone</strong> will keep you in the same league with no reward.</li><li><strong>Demotion Zone</strong> will demote you to the previous league.</li></ul> </li><li>Your final rank for a league will be recorded when the league ends</li><li>The top 3 players on the leaderboard will earn an extra prize!</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b3b36a17-541c-43d1-af97-2937db6cdc50.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b3b36a17-541c-43d1-af97-2937db6cdc50.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b3b36a17-541c-43d1-af97-2937db6cdc50.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/b3b36a17-541c-43d1-af97-2937db6cdc50.gif 1.5x\" alt=\"\"> </a></p><h3><span style=\"color: rgba(193, 76, 138, 1);\"><strong><span style=\"color: rgba(193, 76, 138, 1);\">Global Leaderboard </span></strong></span></h3><p>The Global Leaderboard lets you see how you rank against other players in your country and around the world.</p><p>To move up the leaderboard and become a Hall of Famer, clear as many levels as you can within 3 months. Both the global and country leaderboards reset every 3 months.</p><p>You can participate in the Global Leaderboard on the 1st of July!</p><p><span style=\"color: rgba(193, 76, 138, 1);\"><strong></strong></span></p><p><span style=\"color: rgba(193, 76, 138, 1);\"><strong>Global</strong></span></p><ul><li>Compete with the top 1,000 players worldwide.</li><li>Gain points by clearing levels to rise through the ranks.</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2f4f8a9c-60cd-43e5-93cf-52597f6f2afa.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2f4f8a9c-60cd-43e5-93cf-52597f6f2afa.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2f4f8a9c-60cd-43e5-93cf-52597f6f2afa-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/2f4f8a9c-60cd-43e5-93cf-52597f6f2afa-2t.png 1.5x\" alt=\"\"></a></p><p><span style=\"color: rgba(193, 76, 138, 1);\"><strong>Local</strong></span></p><ul><li>Compete with the top 1,000 players in your country.</li><li>Clear levels to improve your ranking.</li> </ul><p></p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea1cb9dc-c4c1-4516-8d6d-346684a8d68d.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea1cb9dc-c4c1-4516-8d6d-346684a8d68d.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea1cb9dc-c4c1-4516-8d6d-346684a8d68d-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/ea1cb9dc-c4c1-4516-8d6d-346684a8d68d-2t.png 1.5x\" alt=\"\"> </a></p><p><span style=\"color: rgba(193, 76, 138, 1);\"><strong>Hall of Fame</strong></span></p><ul><li>The Hall of Fame displays the top three players globally from the previous quarter.</li><li>Clear as many levels as possible within 3 months to earn a spot in the Hall of Fame.</li> </ul><p></p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/241aa38d-8601-4bd5-b297-be243e6cb251.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/241aa38d-8601-4bd5-b297-be243e6cb251.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/241aa38d-8601-4bd5-b297-be243e6cb251-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/241aa38d-8601-4bd5-b297-be243e6cb251-2t.png 1.5x\" alt=\"\"> </a></p><p></p><p><span style=\"color: rgba(55, 53, 47, 1);\"></span></p><p></p>",
+        "description": "What is the Leaderboard A leaderboard is a rank system in Hexa Sort, allowing players to compete against each other.Rise through the ranks a...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2111/",
+        "aria_label": "Article link to Leaderboard from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810202739948-49048f0a375f49d",
+        "title": "Creator Boost",
+        "body": "<ul><li>Creator boost allows you to support your favorite content creators by using their codes to get specific rewards</li><li>Each individual code can only be claimed once</li><li>The Creator Boost can be accessed at the bottom of the shop</li> </ul><p>&nbsp;</p><p><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/8fff493b-2a3c-4ccd-b75c-d70f394a6f01.gif\"></p>",
+        "description": "Creator boost allows you to support your favorite content creators by using their codes to get specific rewardsEach individual code can only...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2276/",
+        "aria_label": "Article link to Creator Boost  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810204704098-79a606752a20a75",
+        "title": "What is the Spin Wheel?",
+        "body": "<ul><li>You can test your luck on the spin wheel for free!</li><li>The Spin wheel is unlocked after you clear level 5!</li><li>You can spin the wheel after clearing a specific set of levels to win prizes ranging from 5 coins to the ultimate prize of 100 coins</li><li>Apart from this, every time that you spin you can also purchase a super spin to win even bigger prizes to add some cheddar to the top!</li><li>You can find the spin wheel in the main menu</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/72fde9a7-1aa9-4d44-a993-f780de2821a5.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/72fde9a7-1aa9-4d44-a993-f780de2821a5.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/72fde9a7-1aa9-4d44-a993-f780de2821a5-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/72fde9a7-1aa9-4d44-a993-f780de2821a5-2t.png 1.5x\" alt=\"\"> </a></p>",
+        "description": "You can test your luck on the spin wheel for free!The Spin wheel is unlocked after you clear level 5!You can spin the wheel after clearing a...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2277/",
+        "aria_label": "Article link to What is the Spin Wheel?  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810204754672-83e7fe32db11642",
+        "title": "When will I get to use the spin wheel again?",
+        "body": "<ul><li>You can use the spin wheel again after you clear the required number of levels</li><li>The required amounts of levels and how many you have completed for the spin wheel are stated on the spin wheel icon.</li> </ul><p>&nbsp;</p>",
+        "description": "You can use the spin wheel again after you clear the required number of levelsThe required amounts of levels and how many you have completed...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2278/",
+        "aria_label": "Article link to When will I get to use the spin wheel again?  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810204832817-a8489207c76a20a",
+        "title": "What is the super winner's wheel?",
+        "body": "<ul><li>Once you spin the wheel, you can choose to purchase a spin for the super winner wheel.</li><li>The super spin can only be used and purchased after you spin the winner's wheel!</li><li>With the super winners wheel you can win even bigger prizes, starting from 250 coins to up to 1000 coins!</li> </ul><p>&nbsp;</p>",
+        "description": "Once you spin the wheel, you can choose to purchase a spin for the super winner wheel.The super spin can only be used and purchased after yo...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2279/",
+        "aria_label": "Article link to What is the super winner's wheel? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810214143237-71beac470db36e6",
+        "title": "Battle pass",
+        "body": "<h2>What is the Battle Pass Event?</h2><ul><li>The Battle Pass event is a unique timed event that refreshes every month.</li><li>Every month there is a new theme, The current theme is Aerial Odyssey</li><li>The battle pass is unlocked after level 15</li> </ul><h3>How does the Battle Pass Event work?</h3><ul><li style=\"list-style-type: none;\"><ul><li>You automatically join a battle pass event once it starts</li><li>There are two tiers to each battle pass with rewards on completing a certain number of levels</li><li>The battle pass can be accessed through the main menu once it is unlocked</li><li>Press on activate to purchase your premium battle pass.</li><li>Once your premium tier is finished you can unlock your chest for the ultimate coin prize!</li><li>If you purchase the battle pass on the 28th, the battle pass will only be valid for 2 days, and so on.</li><li>Even with a free battle pass you can progress through the stages and unlock your premium prizes later by purchasing the Gold or the Ultimate pass!</li></ul> </li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea38c7a8-6aba-4636-8b30-e335efdc2d5b.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea38c7a8-6aba-4636-8b30-e335efdc2d5b.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ea38c7a8-6aba-4636-8b30-e335efdc2d5b.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/ea38c7a8-6aba-4636-8b30-e335efdc2d5b.gif 1.5x\" alt=\"\"> </a></p><p>&nbsp;</p>",
+        "description": "What is the Battle Pass Event?The Battle Pass event is a unique timed event that refreshes every month.Every month there is a new theme, The...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2283/",
+        "aria_label": "Article link to Battle pass from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810214434217-990d665536daf63",
+        "title": "What is the Difference between the Gold Pass and the Ultimate Gold Pass?",
+        "body": "<table>\n<thead><tr><th>&nbsp;</th><th>Gold Pass</th><th>Ultimate Gold Pass</th></tr> </thead><tbody><tr><td style=\"width: 230px;\">Exclusive Rewards</td><td style=\"width: 230px;\">\u2705</td><td style=\"width: 230px;\">\u2705</td> </tr><tr><td style=\"width: 230px;\">Golden Picture Frame</td><td style=\"width: 230px;\">\u2705 (Unique)</td><td style=\"width: 230px;\">\u2705 (More bling than the Gold)</td> </tr><tr><td style=\"width: 230px;\">8 Lives</td><td style=\"width: 230px;\">\u274c</td><td style=\"width: 230px;\">\u2705</td></tr> </tbody>\n</table>",
+        "description": "&nbsp;Gold PassUltimate Gold Pass Exclusive Rewards\u2705\u2705 Golden Picture Frame\u2705 (Unique)\u2705 (More bling than the Gold) 8 Lives\u274c\u2705 ",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2284/",
+        "aria_label": "Article link to What is the Difference between the Gold Pass and the Ultimate Gold Pass? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810214552119-eeb20b41eca2597",
+        "title": "I purchased the Ultimate / Gold Pass but I did not receive it?",
+        "body": "<ul><li>If you have purchased the ultimate/gold pass and have not received it then follow these steps:<ul><li>Use the Restore Purchases Button found in the settings menu</li><li>If the Restore Purchases Button doesn't fix the issue, please delete the game from your device settings and reinstall it.</li><li>In case that does not work either, please contact in-game chat support with the purchase receipts (found in your email) mentioning:<ul><li>Order Number</li><li>Date</li><li>Contents of Purchase</li></ul> </li></ul> </li> </ul><p>&nbsp;</p>",
+        "description": "If you have purchased the ultimate/gold pass and have not received it then follow these steps:Use the Restore Purchases Button found in the ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2285/",
+        "aria_label": "Article link to I purchased the Ultimate / Gold Pass but I did not receive it? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810215306960-8f295a770abba02",
+        "title": "Blaze streak",
+        "body": "<h3>What is the Hexa Blaze Streak?</h3><ul><li>Hexa Blaze Streak is a timed event that you can join any day of the week</li><li>The event is unlocked after you clear level 8</li><li>The Event is started from the moment you tap join</li><li>The event duration for Hexa Blaze Streak is 3 days i.e 72 hours after you press join</li> </ul><h3>How does Hexa Blaze Streak work?</h3><ul><li>You have to complete levels without failing to maintain a streak.</li><li>Every time you lose a level you are demoted to the last tier</li><li>Each tier has a different requirement for how many levels you need to clear without failing</li><li>At the end of each tier, you can collect rewards, additionally, if you clear 100 levels without failing in 3 days you can collect the grand prize!</li> </ul><p>&nbsp;</p><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/32a42e40-1854-4aea-8751-e762bd451cfe.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/32a42e40-1854-4aea-8751-e762bd451cfe.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/32a42e40-1854-4aea-8751-e762bd451cfe-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/32a42e40-1854-4aea-8751-e762bd451cfe-2t.png 1.5x\" alt=\"\"> </a></p>",
+        "description": "What is the Hexa Blaze Streak?Hexa Blaze Streak is a timed event that you can join any day of the weekThe event is unlocked after you clear ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2286/",
+        "aria_label": "Article link to Blaze streak  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810223934867-fadd7538d0a9628",
+        "title": "What happens if I fail a level?",
+        "body": "<ul><li>If you fail a level, you will be displayed the level fail pop-up from where you can watch a Rewarded Video to continue again or you could choose to use 100 coins to play on.</li><li>Once you tap on the Play On button, four spinners will be launched that will free up 4 slots allowing you to continue playing</li><li>If you choose not to play, you will lose a <strong>life</strong> and have to play your current level again.</li> </ul><p>&nbsp;</p>",
+        "description": "If you fail a level, you will be displayed the level fail pop-up from where you can watch a Rewarded Video to continue again or you could ch...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2298/",
+        "aria_label": "Article link to What happens if I fail a level? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810224025096-ab12f8fa02f5474",
+        "title": "What do I do if I am out of coins?",
+        "body": "<ul><li>If you are out of coins, you can do the following to get more coins:<ul><li>Complete some of your weekly quests</li><li>Get 5 coins every hour from the daily quests or watch an RV for some coins. Please note that the ads reset after 12 hours.</li><li>Purchase coins in the shop</li></ul> </li> </ul><p>&nbsp;</p>",
+        "description": "If you are out of coins, you can do the following to get more coins:Complete some of your weekly questsGet 5 coins every hour from the daily...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2299/",
+        "aria_label": "Article link to What do I do if I am out of coins? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810224124217-ed9f04c2e9d4e50",
+        "title": "What are coins used for?",
+        "body": "<ul><li>Coins are the in-game currency for Hexa Sort and can be used for:<ul><li>Purchasing boosters</li><li>To continue playing if you fail a level</li><li>Purchasing lives</li></ul> </li> </ul><p>&nbsp;</p>",
+        "description": "Coins are the in-game currency for Hexa Sort and can be used for:Purchasing boostersTo continue playing if you fail a levelPurchasing lives ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2300/",
+        "aria_label": "Article link to What are coins used for? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810224256865-5576a3c504814ba",
+        "title": "Lives",
+        "body": "<h3>What are Lives?</h3><ul><li>Lives show you the number of attempts you can have to complete a level</li><li>You lose one life (attempt) each time you fail a level</li><li>You can see how many lives you have from the heart-shaped icon displayed at the top middle of the home screen</li><li>You have a maximum of 5 lives available, which are increased to 8 if you buy the Ultimate Gold Pass</li><li>One life is refilled every 30 minutes</li> </ul><h3>How can I get more lives?</h3><ul><li>You can purchase the Safety Net Offer that contains Infinite Lives allowing you to play as much as you like without worrying about the number of attempts.</li><li>You can get infinite lives for 30 minutes from the Daily Rewards</li><li>You can purchase the Ultimate Gold Pass that increases your lives to 8</li><li>Lives also regenerate automatically every 30 minutes.</li> </ul><p>&nbsp;</p><p>&nbsp;</p>",
+        "description": "What are Lives?Lives show you the number of attempts you can have to complete a levelYou lose one life (attempt) each time you fail a levelY...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2301/",
+        "aria_label": "Article link to Lives from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810224344585-e7557e6cb2d76f8",
+        "title": "Boosters",
+        "body": "<ul><li>There are three types of boosters, which you can get by spending coins<ul><li><strong>Hammer</strong> can clear any stack on the board of your choosing</li><li><strong>Swap/Replace</strong> helps you swap any one stack with another on the board</li><li><strong>Refresh Booster</strong> refreshes the tiles in the tile tray displayed at the bottom of the screen</li></ul> </li> </ul><p>&nbsp;</p>",
+        "description": "There are three types of boosters, which you can get by spending coinsHammer can clear any stack on the board of your choosingSwap/Replace h...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2302/",
+        "aria_label": "Article link to Boosters from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810222219119-bbcebc926165b34",
+        "title": "Piggy Bank",
+        "body": "<ul><li>The Piggy bank is an In-game feature that saves coins until you are ready to break it (like an actual piggy bank)</li><li>When you complete a level, 15 coins are added to your piggy bank</li><li>You can purchase and open the piggy bank at any point in time, however, it is recommended that you open it once you have it maxed out</li><li>A piggy bank has a limit of 700 coins that it can hold</li><li>Once a piggy bank is opened it is reset to 0 and you can start recollecting coins again.</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/67bc2c57-9cde-40f8-bddd-a6a9cf7244dd.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/67bc2c57-9cde-40f8-bddd-a6a9cf7244dd.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/67bc2c57-9cde-40f8-bddd-a6a9cf7244dd.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/67bc2c57-9cde-40f8-bddd-a6a9cf7244dd.gif 1.5x\" alt=\"\"> </a></p>",
+        "description": "The Piggy bank is an In-game feature that saves coins until you are ready to break it (like an actual piggy bank)When you complete a level, ...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2294/",
+        "aria_label": "Article link to Piggy Bank  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810222319600-20892ded1189a5c",
+        "title": "Meta Worlds",
+        "body": "<ul><li>When you're in the main menu you will see different Meta worlds that you can color and collect!</li><li>Each time you finish a level you will receive several color tiles that you can use to color your meta-worlds</li><li>Each Meta World has 5-6 elements that you can color</li><li>To progress through meta worlds, you have to clear a specific number of levels</li> </ul><p>&nbsp;</p>",
+        "description": "When you're in the main menu you will see different Meta worlds that you can color and collect!Each time you finish a level you will receive...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2295/",
+        "aria_label": "Article link to Meta Worlds from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810223129220-3335455c1edbaff",
+        "title": "Mailbox",
+        "body": "<ul><li>The Mailbox can be found in the settings panel</li><li>You can stay up to date with the latest news and updates using the mailbox</li><li>In case you have a dispute and are rewarded by our CS team you can claim your gifts in the Mailbox.</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/8ce6e891-eabe-4a7a-8ee4-ea8b923a9ad2.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/8ce6e891-eabe-4a7a-8ee4-ea8b923a9ad2.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/8ce6e891-eabe-4a7a-8ee4-ea8b923a9ad2.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/8ce6e891-eabe-4a7a-8ee4-ea8b923a9ad2.gif 1.5x\" alt=\"\"> </a></p>",
+        "description": "The Mailbox can be found in the settings panelYou can stay up to date with the latest news and updates using the mailboxIn case you have a d...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2296/",
+        "aria_label": "Article link to Mailbox  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240810223250104-986b0ccecf1e8b1",
+        "title": "Daily Rewards",
+        "body": "<ul><li>You can collect free coins every hour using the daily rewards sections</li><li>The daily rewards section can be found in the main menu</li><li>You can also claim additional rewards every 12 hours by watching ads</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7ca0e840-b2b9-4873-a70f-82b9fc471fc2.png\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7ca0e840-b2b9-4873-a70f-82b9fc471fc2.png\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/7ca0e840-b2b9-4873-a70f-82b9fc471fc2-t.png 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/7ca0e840-b2b9-4873-a70f-82b9fc471fc2-2t.png 1.5x\" alt=\"\"> </a></p>",
+        "description": "You can collect free coins every hour using the daily rewards sectionsThe daily rewards section can be found in the main menuYou can also cl...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2297/",
+        "aria_label": "Article link to Daily Rewards  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240722221753076-e36bebd5abc2d47",
+        "title": "What is the Weekly Quest?",
+        "body": "<p>What is the Weekly Quest?</p><ul><li>&nbsp;A weekly quest is a timed event that resets every Monday and can be accessed from your home screen.</li><li>You will be presented with a set of 6 tasks that you need to complete within the week</li><li>Upon Completion of Each Task, you can claim a reward of a specific number of coins</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b35abbc7-52d0-4d8c-a664-0ebf5759bbf4.jpg\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img style=\"display: block; margin-left: auto; margin-right: auto;\" src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b35abbc7-52d0-4d8c-a664-0ebf5759bbf4.jpg\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/b35abbc7-52d0-4d8c-a664-0ebf5759bbf4-t.jpg 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/b35abbc7-52d0-4d8c-a664-0ebf5759bbf4-2t.jpg 1.5x\" alt=\"\"> </a></p>",
+        "description": "What is the Weekly Quest?&nbsp;A weekly quest is a timed event that resets every Monday and can be accessed from your home screen.You will b...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2220/",
+        "aria_label": "Article link to What is the Weekly Quest? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240722221950265-10fb5b668711dfe",
+        "title": "How do I use Play On the Weekly Quest?",
+        "body": "<ul><li>Play on is a feature that gives you a second chance to replay the level</li><li>If you fail a level, you can use the play on button to replay the level</li><li>Upon using the play on button 4 spinners are launched which break random tiles allowing you to keep playing</li><li>You can use 200 coins to use the play on button.</li><li>Every time you fail a level, the coins required to play on increases by 100</li>\n</ul>",
+        "description": "Play on is a feature that gives you a second chance to replay the levelIf you fail a level, you can use the play on button to replay the lev...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2221/",
+        "aria_label": "Article link to How do I use Play On the Weekly Quest? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20240722222047969-daed445eb89a28c",
+        "title": "How do I merge 3 stacks at the same time in the weekly quest?",
+        "body": "<ul><li>For this task, you need to place your tiles in such a way that three stacks merge and disappear off the board.</li><li>The stacks do not have to be in the same place and can be merged anywhere on the board, the only prerequisite is that you need to clear 3 or more stacks at the same time of any colour.</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ae077c31-8d46-4524-8fa1-bf5b7f0f0b9a.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ae077c31-8d46-4524-8fa1-bf5b7f0f0b9a.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/ae077c31-8d46-4524-8fa1-bf5b7f0f0b9a.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/ae077c31-8d46-4524-8fa1-bf5b7f0f0b9a.gif 1.5x\" alt=\"\"> </a></p>",
+        "description": "For this task, you need to place your tiles in such a way that three stacks merge and disappear off the board.The stacks do not have to be i...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2222/",
+        "aria_label": "Article link to How do I merge 3 stacks at the same time in the weekly quest? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20241011143103872-e210b90917aef44",
+        "title": "Treasure Quest",
+        "body": "<h3>What is Treasure Quest?</h3><ul><li>Treasure Quest is a timed event lasting for one day</li><li>The event is unlocked at level 50</li><li>100 users are added into a randomly generated pool</li><li>The only goal is clearing 7 levels without failing in a set time period to attain the ending reward</li> </ul><h3>How to play treasure quest?</h3><ul><li>The event starts once you receive an invite and you join</li><li>Treasure Quest lasts for 1 day</li><li>100 users have to clear 7 levels without failing.</li><li>If at any point you fail a level you lose the event</li><li>Event rewards are divided between all the users that clear all 7 levels.</li> </ul><p>&nbsp;</p><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2c6513db-6c0e-4d37-a264-f176afb4471b.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2c6513db-6c0e-4d37-a264-f176afb4471b.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/2c6513db-6c0e-4d37-a264-f176afb4471b.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/2c6513db-6c0e-4d37-a264-f176afb4471b.gif 1.5x\" alt=\"\"> </a></p>",
+        "description": "What is Treasure Quest?Treasure Quest is a timed event lasting for one dayThe event is unlocked at level 50100 users are added into a random...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2435/",
+        "aria_label": "Article link to Treasure Quest from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20250109161732486-f37f34dd4e4af1b",
+        "title": "What is Donut Craze?",
+        "body": "<ul><li>Donut Craze is a timed event that starts every Thursday and lasts until Sunday.</li><li>Players can join and start playing anytime during the event.</li><li>The event unlocks after completing level 39.</li> </ul><p></p>",
+        "description": "Donut Craze is a timed event that starts every Thursday and lasts until Sunday.Players can join and start playing anytime during the event.T...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2578/",
+        "aria_label": "Article link to What is Donut Craze? from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20250109163601897-061e511fa151e4f",
+        "title": "How to play Donut Craze",
+        "body": "<ul><li>Collect donuts by playing levels during the event.</li><li>Use the collected donuts to complete orders by figuring out the exact sequence of donuts for each order.</li><li>Every time you complete an order, you will receive rewards!</li><li>You can complete up to 8 orders, with each order becoming more challenging as more donuts are added.</li><li>Any leftover donuts after completing all orders will be converted into extra rewards.</li> </ul><p><a href=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f073adfc-d790-4590-9fae-5acad8c50e61.gif\" target=\"_blank\" data-lightbox=\"true\" rel=\"nofollow\"><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f073adfc-d790-4590-9fae-5acad8c50e61.gif\" srcset=\"https://d2duuy9yo5pldo.cloudfront.net/algames/f073adfc-d790-4590-9fae-5acad8c50e61.gif 1x, https://d2duuy9yo5pldo.cloudfront.net/algames/f073adfc-d790-4590-9fae-5acad8c50e61.gif 1.5x\" alt=\"\"> </a></p><p></p>",
+        "description": "Collect donuts by playing levels during the event.Use the collected donuts to complete orders by figuring out the exact sequence of donuts f...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/2579/",
+        "aria_label": "Article link to How to play Donut Craze from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20260210205832737-e11948f945ac653",
+        "title": "What is Arrow Hunt?",
+        "body": "<ul><li>Arrow Hunt is a limited time event where you will compete in a pool of 50 players</li><li>The player pool is selected randomly</li><li>Arrow Hunt is available when you reach level 30</li><li>Arrow Hunt is available every Friday, Saturday and Sunday</li><li>The Arrow Hunt lasts for one day (24 hours)</li> </ul><p></p><p>&nbsp;</p>",
+        "description": "Arrow Hunt is a limited time event where you will compete in a pool of 50 playersThe player pool is selected randomlyArrow Hunt is available...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/3296/",
+        "aria_label": "Article link to What is Arrow Hunt?  from section Gameplay link"
+      },
+      {
+        "id": "algames_faq_20260210205952893-9548796c759fbf7",
+        "title": "How to Play Arrow Hunt?",
+        "body": "<ul><li>During the event you will collect targets by beating levels</li><li>Your rank will be determined by the number of targets you have collected</li><li>The amount of targets collected by you can be maximized by beating levels without failing.</li><li>If you fail a level your multiplier will reset</li><li>When the event is completed, you will receive rewards based on your rank</li><li>Each Arrow Hunt is a separate even and you cannot transfer your targets to the next event.</li> </ul><p><img src=\"https://d2duuy9yo5pldo.cloudfront.net/algames/8340435f-bb50-4fd5-bf7e-47357d1407ad.gif\"></p><p></p>",
+        "description": "During the event you will collect targets by beating levelsYour rank will be determined by the number of targets you have collectedThe amoun...",
+        "url": "/hc-sdkx/en/app/algames_platform_20240129201332045-7e197bedd0b9c2c/faq/3297/",
+        "aria_label": "Article link to How to Play Arrow Hunt?\u00a0 from section Gameplay link"
+      }
+    ],
+    "icon": "\ud83d\udcda"
+  }
+}

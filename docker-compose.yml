@@ -105,8 +105,6 @@ services:
       - BOT_DB_USER=${BOT_DB_USER:-chatwoot_bot}
       - BOT_DB_PASSWORD=${BOT_DB_PASSWORD:-chatwoot_bot}
       - BOT_DB_SSL=${BOT_DB_SSL:-false}
-    volumes:
-      - ./:/app:ro
     command: ["node", "factory/server.mjs"]
     restart: unless-stopped
 

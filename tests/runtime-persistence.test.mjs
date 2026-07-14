@@ -203,4 +203,5 @@ test('support runtime effects are idempotent within agent-bot scope', () => {
     migration,
     /bot_outbound_effects\.agent_bot_id = COALESCE\(p_agent_bot_id, 0\)/,
   );
+  assert.match(migration, /WHERE agent_bot_id = 0\s+AND effect_key = p_effect_key/);
 });

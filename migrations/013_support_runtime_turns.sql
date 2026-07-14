@@ -203,6 +203,28 @@ BEGIN
 END;
 $$;
 
+-- Legacy workflows do not pass agent_bot_id. Keep their completion scoped to
+-- the legacy bot (0) now that effect keys are unique per bot rather than global.
+CREATE OR REPLACE FUNCTION bot_complete_outbound_effect(
+  p_effect_key TEXT,
+  p_response_data JSONB DEFAULT '{}'::jsonb,
+  p_remote_id TEXT DEFAULT NULL
+)
+RETURNS VOID
+LANGUAGE sql
+AS $$
+  UPDATE bot_outbound_effects
+     SET status = 'completed',
+         response_data = COALESCE(p_response_data, '{}'::jsonb),
+         remote_id = COALESCE(p_remote_id, remote_id),
+         completed_at = clock_timestamp(),
+         lease_owner = NULL,
+         lease_until = NULL,
+         updated_at = clock_timestamp()
+   WHERE agent_bot_id = 0
+     AND effect_key = p_effect_key;
+$$;
+
 DROP FUNCTION IF EXISTS bot_claim_outbound_effect(
   BIGINT, BIGINT, TEXT, TEXT, TEXT, JSONB, TEXT, INTEGER
 );

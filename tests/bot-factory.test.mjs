@@ -45,6 +45,10 @@ test('Factory containers build production dependencies instead of relying on hos
   assert.match(dockerfile, /npm ci --omit=dev/);
   assert.match(compose, /dockerfile: factory\/Dockerfile/);
   assert.match(queueCompose, /dockerfile: factory\/Dockerfile/);
+  const factoryService = (source) =>
+    source.split('\n  bot-factory:')[1].split('\nvolumes:')[0];
+  assert.doesNotMatch(factoryService(compose), /\.\/:\/app/);
+  assert.doesNotMatch(factoryService(queueCompose), /\.\/:\/app/);
 });
 
 test('runtime artifact refresh is sourced from the owned generic artifact', () => {
@@ -634,6 +638,10 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Respond Authorized'));
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Ingest Durable Event'));
   assert.ok(ingressBody.nodes.some((node) => node.name === 'Recover Next Batch'));
+  const recover = ingressBody.nodes.find(
+    (node) => node.name === 'Recover Next Batch',
+  );
+  assert.match(recover.parameters.query, /,\s*55\);/);
   assert.deepEqual(ingressBody.connections['Restore Debounced Context'], {
     main: [[{ node: 'Invoke Support Runtime', type: 'main', index: 0 }]],
   });

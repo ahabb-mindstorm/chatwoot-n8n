@@ -374,11 +374,14 @@ export async function executeN8nRuntimeEffects({
     skippedEffectIds,
     failedEffectIds,
   };
-  if (criticalFailures.length > 0) {
+  if (failedEffectIds.length > 0) {
+    const hasCriticalFailure = criticalFailures.length > 0;
     const error = new Error(
-      `Critical runtime effects failed: ${criticalFailures.join(', ')}`,
+      `${hasCriticalFailure ? 'Critical runtime effects' : 'Runtime effects'} failed: ${failedEffectIds.join(', ')}`,
     );
-    error.code = 'critical_effect_failed';
+    error.code = hasCriticalFailure
+      ? 'critical_effect_failed'
+      : 'effect_execution_failed';
     error.execution = execution;
     throw error;
   }

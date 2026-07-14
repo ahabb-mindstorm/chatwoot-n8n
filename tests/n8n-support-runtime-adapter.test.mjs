@@ -215,6 +215,59 @@ test('typed effect executor leaves failed critical effects retryable', async () 
   ]);
 });
 
+test('typed effect executor retries failed noncritical effects after opening for human', async () => {
+  const helioPaths = [];
+  await assert.rejects(
+    executeN8nRuntimeEffects({
+      receipt: {
+        deliveryId: 'delivery-decoration-failure',
+        effects: [
+          {
+            type: 'send_private_note',
+            idempotencyKey: 'delivery-decoration-failure:note',
+            critical: false,
+          },
+          {
+            type: 'open_for_human',
+            idempotencyKey: 'delivery-decoration-failure:open',
+            critical: true,
+          },
+        ],
+      },
+      accept: {
+        accountId: 7,
+        conversationId: 9001,
+        helioRuntime: {
+          agentBotId: 42,
+          accessToken: 'bot-token',
+          helioBaseUrl: 'https://helio.test',
+        },
+      },
+      async persistenceRequest(path) {
+        if (path.endsWith('/claim')) return { shouldRun: true };
+        return { ok: true };
+      },
+      async httpRequest(request) {
+        helioPaths.push(new URL(request.url).pathname);
+        if (request.url.endsWith('/messages')) {
+          throw new Error('temporary note failure');
+        }
+        return { ok: true };
+      },
+    }),
+    (error) =>
+      error.code === 'effect_execution_failed' &&
+      error.execution.completedEffectIds.includes(
+        'delivery-decoration-failure:open',
+      ) &&
+      error.execution.failedEffectIds.includes(
+        'delivery-decoration-failure:note',
+      ),
+  );
+  assert.match(helioPaths[0], /toggle_status$/);
+  assert.match(helioPaths[1], /messages$/);
+});
+
 test('generated n8n adapter executes a grounded proposal through SupportRuntime', async () => {
   const supportRuntimeSource = readFileSync(
     join(root, 'runtime', 'support-runtime.mjs'),

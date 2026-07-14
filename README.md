@@ -157,38 +157,7 @@ Regenerate workflow after editing `scripts/generate-postgres-workflow.mjs`:
 npm run workflow:generate-postgres
 ```
 
-### Test workflow with no Chatwoot writes
-
-Workflow: `workflows/progolf-support-bot-v2-pgvector-test.json` (webhook `progolf-support-bot-v2-pgvector-test`).
-
-This is a generated replay workflow copied from the production PGVector workflow. It keeps the core bot path, RAG, memory, routing, forms, handoff preparation, idempotency, and outbound-effect completion logic, but replaces Chatwoot mutation HTTP nodes with Code nodes that capture the request body instead of posting it.
-
-Suppressed Chatwoot actions:
-
-- Public bot replies
-- Escalation forms
-- Conversation custom attributes
-- Private handoff notes
-- Labels
-- Player handoff notification
-- Conversation open/status changes
-- Typing indicators
-
-Safety differences from production:
-
-- Webhook auth is bypassed for replay payloads.
-- Schedule-trigger recovery and cleanup paths are removed.
-- Durable event account/conversation/message identifiers are namespaced before Postgres writes.
-- Postgres nodes are retargeted to a credential named `Bot Postgres Test`.
-- Chat memory uses the `progolf_support_json_test:` namespace.
-
-Regenerate after production workflow changes:
-
-```bash
-npm run workflow:generate-test
-```
-
-> Improvement-loop / eval tooling was moved to branch `docs/testing` (see `ARCHIVE-TESTING.md` there).
+> Improvement-loop / eval / test-replay tooling (including the no-Chatwoot-writes test workflow) was moved to branch `docs/testing` — see `ARCHIVE-TESTING.md` there.
 
 ## Scripts
 

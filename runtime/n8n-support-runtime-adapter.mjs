@@ -186,6 +186,205 @@ export function legacyOutputFromRuntimeReceipt(receipt, proposal, nextState) {
   };
 }
 
+function n8nHandoffNote(effect) {
+  const lines = [
+    `Bot escalation - ${String(effect.category || 'other')}`,
+    String(effect.summary || 'Player requested human assistance.').trim(),
+  ];
+  const values = n8nObject(effect.collectedValues);
+  const entries = Object.entries(values);
+  if (entries.length > 0) {
+    lines.push('', 'Collected details:');
+    for (const [name, value] of entries) {
+      lines.push(`${name}: ${String(value)}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function n8nEffectRequest(effect, accept) {
+  const runtime = n8nObject(accept.helioRuntime);
+  const accountId = Number(accept.accountId || runtime.accountId);
+  const conversationId = Number(accept.conversationId);
+  const baseUrl = String(runtime.helioBaseUrl || '').replace(/\/$/, '');
+  const conversationUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}`;
+  const headers = {
+    api_access_token: String(runtime.accessToken || ''),
+    'Idempotency-Key': String(effect.idempotencyKey || ''),
+  };
+  const messageAttributes = {
+    n8n_idempotency_key: String(effect.idempotencyKey || ''),
+  };
+
+  if (effect.type === 'send_public_message' || effect.type === 'send_player_notification') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/messages`,
+      headers,
+      body: {
+        content: String(effect.text || ''),
+        message_type: 'outgoing',
+        content_type: 'text',
+        private: false,
+        content_attributes: messageAttributes,
+      },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  if (effect.type === 'send_private_note') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/messages`,
+      headers,
+      body: {
+        content: n8nHandoffNote(effect),
+        message_type: 'outgoing',
+        content_type: 'text',
+        private: true,
+        content_attributes: messageAttributes,
+      },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  if (effect.type === 'send_form') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/messages`,
+      headers,
+      body: {
+        content: String(effect.text || 'Please provide the remaining details below.'),
+        message_type: 'outgoing',
+        content_type: 'form',
+        private: false,
+        content_attributes: {
+          ...messageAttributes,
+          items: Array.isArray(effect.fields) ? effect.fields : [],
+          attachment_config: effect.attachmentConfig || null,
+          known_values: n8nObject(effect.knownValues),
+          category: String(effect.category || ''),
+        },
+      },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  if (effect.type === 'set_label') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/labels`,
+      headers,
+      body: { labels: [String(effect.label || '')].filter(Boolean) },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  if (effect.type === 'set_typing') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/toggle_typing_status`,
+      headers,
+      body: {
+        typing_status: effect.active === true ? 'on' : 'off',
+        is_private: effect.private === true,
+      },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  if (effect.type === 'open_for_human') {
+    return {
+      method: 'POST',
+      url: `${conversationUrl}/toggle_status`,
+      headers,
+      body: { status: 'open' },
+      json: true,
+      timeout: 12000,
+    };
+  }
+
+  throw new Error(`Unsupported runtime effect type: ${String(effect.type || 'missing')}`);
+}
+
+export async function executeN8nRuntimeEffects({
+  receipt,
+  accept,
+  persistenceRequest,
+  httpRequest,
+}) {
+  const effects = Array.isArray(receipt?.effects) ? receipt.effects : [];
+  const orderedEffects = effects
+    .map((effect, index) => ({ effect, index }))
+    .sort((left, right) =>
+      Number(right.effect?.critical === true) - Number(left.effect?.critical === true) ||
+      left.index - right.index,
+    )
+    .map(({ effect }) => effect);
+  const completedEffectIds = [];
+  const skippedEffectIds = [];
+  const failedEffectIds = [];
+  const criticalFailures = [];
+  const owner = [
+    accept?.helioRuntime?.runtimeRevision || receipt?.runtimeRevision || 'runtime',
+    receipt?.deliveryId || 'turn',
+  ].join(':');
+
+  for (const effect of orderedEffects) {
+    const effectId = String(effect?.idempotencyKey || '');
+    try {
+      const claim = await persistenceRequest('/runtime/effects/claim', {
+        accountId: Number(accept?.accountId || accept?.helioRuntime?.accountId),
+        agentBotId: Number(accept?.helioRuntime?.agentBotId),
+        conversationId: Number(accept?.conversationId),
+        deliveryId: String(receipt?.deliveryId || ''),
+        owner,
+        effect,
+      });
+      if (claim?.shouldRun !== true) {
+        skippedEffectIds.push(effectId);
+        continue;
+      }
+      const response = await httpRequest(n8nEffectRequest(effect, accept));
+      await persistenceRequest('/runtime/effects/complete', {
+        agentBotId: Number(accept?.helioRuntime?.agentBotId),
+        effectId,
+        response,
+        remoteId: response?.id != null ? String(response.id) : null,
+      });
+      completedEffectIds.push(effectId);
+    } catch (error) {
+      failedEffectIds.push(effectId);
+      await persistenceRequest('/runtime/effects/fail', {
+        agentBotId: Number(accept?.helioRuntime?.agentBotId),
+        effectId,
+        failureCode: 'effect_execution_failed',
+      }).catch(() => {});
+      if (effect?.critical === true) criticalFailures.push(effectId);
+    }
+  }
+
+  const execution = {
+    completedEffectIds,
+    skippedEffectIds,
+    failedEffectIds,
+  };
+  if (criticalFailures.length > 0) {
+    const error = new Error(
+      `Critical runtime effects failed: ${criticalFailures.join(', ')}`,
+    );
+    error.code = 'critical_effect_failed';
+    error.execution = execution;
+    throw error;
+  }
+  return execution;
+}
+
 function n8nSubmittedValues(value) {
   if (!value) return {};
   if (!Array.isArray(value)) return n8nObject(value);
@@ -302,6 +501,19 @@ const runtimeReceipt = await runtime.handleTurn({
   conversationId,
   events,
 });
+if (runtimeReceipt.retryable === true) {
+  const error = new Error(
+    'Retryable runtime failure: ' + String(runtimeReceipt.failureCode || 'unknown'),
+  );
+  error.code = 'retryable_runtime_failure';
+  throw error;
+}
+const runtimeEffectExecution = await executeN8nRuntimeEffects({
+  receipt: runtimeReceipt,
+  accept,
+  persistenceRequest,
+  httpRequest: this.helpers.httpRequest.bind(this.helpers),
+});
 const runtimeNextState = committedTurn?.nextState || ticketState;
 const output = legacyOutputFromRuntimeReceipt(runtimeReceipt, proposal, runtimeNextState);
 
@@ -311,6 +523,7 @@ return [{
     output,
     support_output: n8nObject(agentItem.output),
     runtimeReceipt,
+    runtimeEffectExecution,
     runtimeNextState,
     runtimeEvidence: faqEvidence,
   },
@@ -329,6 +542,9 @@ export function buildN8nSupportRuntimeAdapterSource(supportRuntimeSource) {
     normalizeN8nTicketState.toString().replace(/^export\s+/, ''),
     normalizeN8nProposal.toString().replace(/^export\s+/, ''),
     legacyOutputFromRuntimeReceipt.toString().replace(/^export\s+/, ''),
+    n8nHandoffNote.toString(),
+    n8nEffectRequest.toString(),
+    executeN8nRuntimeEffects.toString().replace(/^export\s+/, ''),
     n8nSubmittedValues.toString(),
     n8nPublishedPolicy.toString(),
     N8N_ADAPTER_EXECUTION,

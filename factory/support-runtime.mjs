@@ -8,7 +8,7 @@ import { buildN8nSupportRuntimeAdapterSource } from '../runtime/n8n-support-runt
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v5';
+export const RUNTIME_REVISION = 'helio-support-runtime-v6';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',
@@ -93,6 +93,46 @@ const SHARED_RUNTIME_DROP = new Set([
   'Recover Next Batch',
   'Cleanup Schedule',
   'Cleanup Idempotency Records',
+]);
+
+const LEGACY_RUNTIME_EFFECT_NODES = new Set([
+  'Route Requirement Lookup',
+  'Send Reply',
+  'Normalize Escalation Lookup',
+  'Load Canonical Escalation Requirements',
+  'Reconcile Handoff Requirements',
+  'Route Action',
+  'Build Escalation Form',
+  'Save Escalation Context',
+  'Route Saved Escalation',
+  'Send Escalation Form',
+  'Prepare Handoff',
+  'Post Internal Note',
+  'Label Conversation',
+  'Notify Player',
+  'Open Conversation',
+  'Code in JavaScript',
+  'Claim Save Escalation Context',
+  'Run Save Escalation Context?',
+  'Complete Save Escalation Context',
+  'Claim Send Reply',
+  'Run Send Reply?',
+  'Complete Send Reply',
+  'Claim Send Escalation Form',
+  'Run Send Escalation Form?',
+  'Complete Send Escalation Form',
+  'Claim Post Internal Note',
+  'Run Post Internal Note?',
+  'Complete Post Internal Note',
+  'Claim Label Conversation',
+  'Run Label Conversation?',
+  'Complete Label Conversation',
+  'Claim Notify Player',
+  'Run Notify Player?',
+  'Complete Notify Player',
+  'Claim Open Conversation',
+  'Run Open Conversation?',
+  'Complete Open Conversation',
 ]);
 
 /** Schedules/recovery only — ingress must keep verify/ingest/respond nodes. */
@@ -182,6 +222,9 @@ export function renderSharedSupportRuntime(template, options = {}) {
   };
 
   workflow.nodes = workflow.nodes.filter((node) => !SHARED_RUNTIME_DROP.has(node.name));
+  workflow.nodes = workflow.nodes.filter(
+    (node) => !LEGACY_RUNTIME_EFFECT_NODES.has(node.name),
+  );
   pruneConnections(workflow);
   rewireSharedRuntimeAfterTypingDrop(workflow);
 
@@ -221,7 +264,6 @@ export function renderSharedSupportRuntime(template, options = {}) {
   patchRuntimeFaqAndMemory(workflow);
   patchRuntimeTaxonomyNodes(workflow);
   patchRuntimeAuthorizationBoundary(workflow);
-  patchRuntimeIgnoredOutcome(workflow);
   patchRuntimeOutboundReferences(workflow);
   sanitizeProGolfVocabulary(workflow);
 
@@ -243,6 +285,15 @@ export function renderSharedSupportRuntime(template, options = {}) {
       [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
       [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
     ],
+  };
+  workflow.connections['Support Agent'] = {
+    main: [
+      [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
+      [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
+    ],
+  };
+  workflow.connections['Merge QA With Routing Decision'] = {
+    main: [[{ node: 'Finalize Batch', type: 'main', index: 0 }]],
   };
   return workflow;
 }

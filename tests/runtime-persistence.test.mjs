@@ -107,6 +107,52 @@ test('Postgres runtime persistence exposes optimistic conflicts without retrying
   );
 });
 
+test('Postgres runtime persistence claims and finalizes typed effects independently', async () => {
+  const queries = [];
+  const pool = {
+    async query(text, values) {
+      queries.push({ text, values });
+      if (text.includes('bot_claim_outbound_effect')) {
+        return { rows: [{ should_run: true, effect_key: values[3], reason: 'claimed' }] };
+      }
+      return { rows: [{ ok: true }] };
+    },
+  };
+  const persistence = createPostgresRuntimePersistence(pool);
+  const effect = {
+    type: 'open_for_human',
+    idempotencyKey: 'delivery-1:open',
+    critical: true,
+  };
+
+  const claim = await persistence.claimEffect({
+    accountId: 7,
+    agentBotId: 42,
+    conversationId: 9001,
+    deliveryId: 'delivery-1',
+    owner: 'runtime:delivery-1',
+    effect,
+  });
+  assert.deepEqual(claim, { shouldRun: true, reason: 'claimed' });
+
+  await persistence.completeEffect({
+    agentBotId: 42,
+    effectId: effect.idempotencyKey,
+    response: { id: 123 },
+    remoteId: '123',
+  });
+  await persistence.failEffect({
+    agentBotId: 42,
+    effectId: 'delivery-1:note',
+    failureCode: 'effect_execution_failed',
+  });
+
+  assert.match(queries[0].text, /bot_claim_outbound_effect/);
+  assert.match(queries[2].text, /status = 'completed'/);
+  assert.match(queries[3].text, /status = 'failed'/);
+  assert.equal(queries[3].values[0], 42);
+});
+
 test('support runtime migration commits receipt, state version, and pending effects together', () => {
   const migration = readFileSync(
     join(root, 'migrations', '013_support_runtime_turns.sql'),

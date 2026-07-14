@@ -74,6 +74,21 @@ export function createFactoryServer(options = {}) {
         return sendJson(response, 200, result);
       }
 
+      if (request.url === '/runtime/effects/claim') {
+        const result = await getRuntimePersistence().claimEffect(body);
+        return sendJson(response, 200, result);
+      }
+
+      if (request.url === '/runtime/effects/complete') {
+        const result = await getRuntimePersistence().completeEffect(body);
+        return sendJson(response, 200, result);
+      }
+
+      if (request.url === '/runtime/effects/fail') {
+        const result = await getRuntimePersistence().failEffect(body);
+        return sendJson(response, 200, result);
+      }
+
       if (request.url === '/deprovision-bot') {
         const result = await deprovisionBotWorkflows(body);
         return sendJson(response, 200, result);

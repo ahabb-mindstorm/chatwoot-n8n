@@ -272,7 +272,7 @@ test('renderMainWorkflow patches webhook path, name, meta, system message, and b
   assert.doesNotMatch(supportAgent.parameters.options.systemMessage, /Pro Caddy/);
   assert.equal(loadConfig.type, 'n8n-nodes-base.code');
   assert.match(loadConfig.parameters.jsCode, /Support Funnel|runtimeContract|Game instructions/);
-  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v5/);
+  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v6/);
   assert.match(loadConfig.parameters.jsCode, /api-access-token/);
   assert.match(loadConfig.parameters.jsCode, /configVersion/);
   assert.equal(
@@ -477,20 +477,20 @@ test('shared support runtime uses policy-driven taxonomy, not ProGolf reward heu
   const runtime = renderSharedSupportRuntime(loadMainTemplate(), {
     webhookBaseUrl: 'https://n8n.example.test',
   });
-  const normalize = runtime.nodes.find((node) => node.name === 'Normalize Escalation Lookup');
   const parser = runtime.nodes.find((node) => node.name === 'Agent Output Parser');
-  const form = runtime.nodes.find((node) => node.name === 'Build Escalation Form');
-  const normalizeCode = String(normalize?.parameters?.jsCode || '');
-  const formCode = String(form?.parameters?.jsCode || '');
+  const authorize = runtime.nodes.find(
+    (node) => node.name === 'Merge QA With Routing Decision',
+  );
+  const authorizeCode = String(authorize?.parameters?.jsCode || '');
   const schema = String(parser?.parameters?.inputSchema || '');
 
-  assert.match(normalizeCode, /botRuntimeConfig/);
-  assert.match(normalizeCode, /rewardSources/);
-  assert.match(normalizeCode, /Accept Runtime Payload/);
-  assert.doesNotMatch(normalizeCode, /golf pass|topshot|loot bag|golf_pass|loot_bag/i);
+  assert.match(authorizeCode, /botRuntimeConfig/);
+  assert.match(authorizeCode, /rewardSources/);
+  assert.match(authorizeCode, /Accept Runtime Payload/);
+  assert.doesNotMatch(authorizeCode, /golf pass|topshot|loot bag|golf_pass|loot_bag/i);
   assert.doesNotMatch(schema, /golf_pass|topshot|loot_bag|reward_pass|special_event|loot_reward/i);
-  assert.doesNotMatch(formCode, /golf pass points/i);
-  assert.match(formCode, /Accept Runtime Payload/);
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Normalize Escalation Lookup'));
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Build Escalation Form'));
 });
 
 test('shared support runtime authorizes agent proposals through SupportRuntime', () => {
@@ -523,6 +523,7 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   assert.match(code, /handleTurn/);
   assert.match(code, /intermediateSteps/);
   assert.match(code, /runtimeReceipt/);
+  assert.match(code, /executeN8nRuntimeEffects/);
   assert.doesNotMatch(code, /pass_through/);
   assert.doesNotMatch(code, /\bexport\s+/);
   assert.ok(!runtime.nodes.some((node) => node.name === 'Prepare Ticket State Persist'));
@@ -539,8 +540,12 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   );
   assert.match(JSON.stringify(routeTurn.parameters), /form_submitted/);
   assert.match(JSON.stringify(routeTurn.parameters), /human_owned/);
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Route Requirement Lookup'));
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Build Escalation Form'));
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Prepare Handoff'));
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Claim Send Reply'));
   assert.equal(
-    runtime.connections['Route Requirement Lookup'].main[2][0].node,
+    runtime.connections['Merge QA With Routing Decision'].main[0][0].node,
     'Finalize Batch',
   );
 });
@@ -597,25 +602,14 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.deepEqual(runtimeBody.connections['Load Bot Config']?.main?.[0], [
     { node: 'Load Ticket State', type: 'main', index: 0 },
   ]);
-  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Claim Send Reply'));
-  assert.deepEqual(runtimeBody.connections['Route Requirement Lookup']?.main?.[0], [
-    { node: 'Claim Send Reply', type: 'main', index: 0 },
-  ]);
-  assert.deepEqual(runtimeBody.connections['Route Saved Escalation']?.main?.[0], [
-    { node: 'Claim Send Escalation Form', type: 'main', index: 0 },
-  ]);
-  const sendReply = runtimeBody.nodes.find((node) => node.name === 'Send Reply');
-  assert.match(
-    JSON.stringify(sendReply?.parameters || {}),
-    /Accept Runtime Payload.*helioRuntime\.accessToken|helioRuntime\.accessToken.*Accept Runtime Payload/,
+  assert.ok(!runtimeBody.nodes.some((node) => node.name === 'Claim Send Reply'));
+  assert.ok(!runtimeBody.nodes.some((node) => node.name === 'Send Reply'));
+  assert.ok(!runtimeBody.nodes.some((node) => node.name === 'Send Escalation Form'));
+  assert.ok(!runtimeBody.nodes.some((node) => node.name === 'Open Conversation'));
+  assert.deepEqual(
+    runtimeBody.connections['Merge QA With Routing Decision']?.main?.[0],
+    [{ node: 'Finalize Batch', type: 'main', index: 0 }],
   );
-  assert.doesNotMatch(
-    JSON.stringify(sendReply?.parameters || {}),
-    /Normalize Claimed Batch|CHATWOOT_AGENT_BOT_ACCESS_TOKEN/,
-  );
-  const claimSend = runtimeBody.nodes.find((node) => node.name === 'Claim Send Reply');
-  assert.match(JSON.stringify(claimSend?.parameters || {}), /Accept Runtime Payload/);
-  assert.doesNotMatch(JSON.stringify(claimSend?.parameters || {}), /Normalize Claimed Batch/);
   const invoke = ingressBody.nodes.find((node) => node.name === 'Invoke Support Runtime');
   assert.match(String(invoke.parameters.url), /n8n-internal\.test\/webhook\/helio-support-runtime/);
   assert.match(
@@ -625,7 +619,7 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
   assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
 
-  assert.equal(result.runtimeRevision, 'helio-support-runtime-v5');
+  assert.equal(result.runtimeRevision, 'helio-support-runtime-v6');
   assert.equal(
     result.webhookUrl,
     'https://public-n8n.example.test/webhook/helio-space-quest-42-7-55-bot',
@@ -671,7 +665,7 @@ test('provisionBotWorkflows uses internal base for ingress→runtime invoke', as
 test('provisionBotWorkflows upserts existing ingress by deterministic name', async () => {
   const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
   const existingName = `Helio space_quest Ingress - account 42 inbox 7`;
-  const runtimeName = `Helio Support Runtime (helio-support-runtime-v5)`;
+  const runtimeName = `Helio Support Runtime (helio-support-runtime-v6)`;
   const { fetchImpl, calls } = createFakeFetch({
     ingressId: 'existing-ingress',
     runtimeId: 'existing-runtime',
@@ -802,6 +796,18 @@ test('server exposes authenticated durable runtime persistence endpoints', async
         },
       };
     },
+    async claimEffect(input) {
+      calls.push({ operation: 'claim', input });
+      return { shouldRun: true, reason: 'claimed' };
+    },
+    async completeEffect(input) {
+      calls.push({ operation: 'complete', input });
+      return { ok: true };
+    },
+    async failEffect(input) {
+      calls.push({ operation: 'fail', input });
+      return { ok: true };
+    },
   };
   const factory = createFactoryServer({ runtimePersistence });
   const factoryUrl = await listen(factory);
@@ -840,7 +846,49 @@ test('server exposes authenticated durable runtime persistence endpoints', async
     });
     assert.equal(commitResponse.status, 200);
     assert.equal((await commitResponse.json()).receipt.stateVersion, 4);
-    assert.deepEqual(calls.map((call) => call.operation), ['find', 'commit']);
+
+    for (const [path, body] of [
+      [
+        'claim',
+        {
+          accountId: 7,
+          agentBotId: 42,
+          conversationId: 9001,
+          deliveryId: 'delivery-2',
+          owner: 'runtime:delivery-2',
+          effect: {
+            type: 'open_for_human',
+            idempotencyKey: 'delivery-2:open',
+          },
+        },
+      ],
+      [
+        'complete',
+        { agentBotId: 42, effectId: 'delivery-2:open', response: { id: 1 } },
+      ],
+      [
+        'fail',
+        {
+          agentBotId: 42,
+          effectId: 'delivery-2:note',
+          failureCode: 'effect_execution_failed',
+        },
+      ],
+    ]) {
+      const response = await fetch(`${factoryUrl}/runtime/effects/${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      assert.equal(response.status, 200, path);
+    }
+    assert.deepEqual(calls.map((call) => call.operation), [
+      'find',
+      'commit',
+      'claim',
+      'complete',
+      'fail',
+    ]);
   } finally {
     if (originalSecret === undefined) {
       delete process.env.BOT_FACTORY_API_SECRET;
@@ -865,7 +913,7 @@ test('provisionBotWorkflows upserts existing workflows by deterministic name', a
       },
       {
         id: 'runtime-workflow-id',
-        name: 'Helio Support Runtime (helio-support-runtime-v5)',
+        name: 'Helio Support Runtime (helio-support-runtime-v6)',
         active: true,
         updatedAt: '2026-06-01T00:00:00.000Z',
       },
@@ -1085,14 +1133,14 @@ test('server accepts a Helio-style provision request and returns usable webhook 
     assert.equal(response.status, 201);
     assert.equal(body.webhookUrl, 'https://public-n8n.example.test/webhook/helio-progolf-42-7-99-bot');
     assert.equal(body.ragTableName, 'bot_rag.faq_progolf_42_7_99');
-    assert.equal(body.runtimeRevision, 'helio-support-runtime-v5');
+    assert.equal(body.runtimeRevision, 'helio-support-runtime-v6');
     assert.deepEqual(body.workflowIds, {
       ingress: 'ingress-id',
       supportRuntime: 'runtime-id',
       main: 'ingress-id',
     });
     assert.deepEqual(createdNames.sort(), [
-      'Helio Support Runtime (helio-support-runtime-v5)',
+      'Helio Support Runtime (helio-support-runtime-v6)',
       'Helio progolf Ingress - account 42 inbox 7',
     ]);
   } finally {

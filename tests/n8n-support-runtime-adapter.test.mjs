@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   buildN8nSupportRuntimeAdapterSource,
+  executeN8nRuntimeEffects,
   normalizeN8nFaqEvidence,
 } from '../runtime/n8n-support-runtime-adapter.mjs';
 
@@ -20,9 +21,22 @@ function runtimePersistenceHarness() {
   const context = {
     helpers: {
       async httpRequest({ url, headers, body }) {
+        if (!url.startsWith('http://factory.test')) {
+          assert.equal(headers.api_access_token, 'bot-token');
+          return { id: 1234 };
+        }
         assert.equal(headers['x-helio-bot-factory-secret'], 'factory-secret');
         if (url.endsWith('/runtime/turns/find')) {
           return { receipt: receipts.get(body.deliveryId) || null };
+        }
+        if (url.endsWith('/runtime/effects/claim')) {
+          return { shouldRun: true, reason: 'claimed' };
+        }
+        if (
+          url.endsWith('/runtime/effects/complete') ||
+          url.endsWith('/runtime/effects/fail')
+        ) {
+          return { ok: true };
         }
         if (!url.endsWith('/runtime/turns/commit')) {
           throw new Error(`Unexpected persistence URL: ${url}`);
@@ -96,6 +110,109 @@ test('generated n8n adapter delegates turn persistence instead of using workflow
   assert.match(source, /BOT_FACTORY_INTERNAL_URL/);
   assert.match(source, /\/runtime\/turns\/find/);
   assert.match(source, /\/runtime\/turns\/commit/);
+  assert.match(source, /retryable_runtime_failure/);
+});
+
+test('typed effect executor opens human handoff before noncritical decoration', async () => {
+  const calls = [];
+  const result = await executeN8nRuntimeEffects({
+    receipt: {
+      deliveryId: 'delivery-handoff',
+      effects: [
+        {
+          type: 'send_private_note',
+          idempotencyKey: 'delivery-handoff:note',
+          category: 'account',
+          summary: 'Player cannot sign in.',
+          collectedValues: { player_id: 'SQ-1' },
+          critical: false,
+        },
+        {
+          type: 'open_for_human',
+          idempotencyKey: 'delivery-handoff:open',
+          critical: true,
+        },
+      ],
+    },
+    accept: {
+      accountId: 7,
+      conversationId: 9001,
+      helioRuntime: {
+        agentBotId: 42,
+        accessToken: 'bot-token',
+        helioBaseUrl: 'https://helio.test',
+        runtimeRevision: 'helio-support-runtime-v6',
+      },
+    },
+    async persistenceRequest(path, body) {
+      calls.push({ kind: 'persistence', path, body });
+      if (path.endsWith('/claim')) return { shouldRun: true };
+      return { ok: true };
+    },
+    async httpRequest(request) {
+      calls.push({ kind: 'helio', request });
+      return { id: calls.length };
+    },
+  });
+
+  const helioCalls = calls.filter((call) => call.kind === 'helio');
+  assert.match(helioCalls[0].request.url, /toggle_status$/);
+  assert.equal(helioCalls[0].request.body.status, 'open');
+  assert.match(helioCalls[1].request.url, /messages$/);
+  assert.equal(helioCalls[1].request.body.private, true);
+  assert.equal(
+    helioCalls[1].request.body.content_attributes.n8n_idempotency_key,
+    'delivery-handoff:note',
+  );
+  assert.deepEqual(result.failedEffectIds, []);
+  assert.deepEqual(result.completedEffectIds, [
+    'delivery-handoff:open',
+    'delivery-handoff:note',
+  ]);
+});
+
+test('typed effect executor leaves failed critical effects retryable', async () => {
+  const persistencePaths = [];
+  await assert.rejects(
+    executeN8nRuntimeEffects({
+      receipt: {
+        deliveryId: 'delivery-critical-failure',
+        effects: [
+          {
+            type: 'open_for_human',
+            idempotencyKey: 'delivery-critical-failure:open',
+            critical: true,
+          },
+        ],
+      },
+      accept: {
+        accountId: 7,
+        conversationId: 9001,
+        helioRuntime: {
+          agentBotId: 42,
+          accessToken: 'bot-token',
+          helioBaseUrl: 'https://helio.test',
+        },
+      },
+      async persistenceRequest(path) {
+        persistencePaths.push(path);
+        if (path.endsWith('/claim')) return { shouldRun: true };
+        return { ok: true };
+      },
+      async httpRequest() {
+        throw new Error('temporary Helio failure');
+      },
+    }),
+    (error) =>
+      error.code === 'critical_effect_failed' &&
+      error.execution.failedEffectIds.includes(
+        'delivery-critical-failure:open',
+      ),
+  );
+  assert.deepEqual(persistencePaths, [
+    '/runtime/effects/claim',
+    '/runtime/effects/fail',
+  ]);
 });
 
 test('generated n8n adapter executes a grounded proposal through SupportRuntime', async () => {
@@ -118,7 +235,13 @@ test('generated n8n adapter executes a grounded proposal through SupportRuntime'
       conversationId: 9001,
       messageId: 'message-grounded-1',
       content: 'How do I reset my access?',
-      helioRuntime: { agentBotId: 42, runtimeRevision: 'runtime-test' },
+      accountId: 7,
+      helioRuntime: {
+        agentBotId: 42,
+        runtimeRevision: 'runtime-test',
+        accessToken: 'bot-token',
+        helioBaseUrl: 'https://helio.test',
+      },
     },
     'Load Bot Config': {
       botConfigVersion: 12,
@@ -212,7 +335,13 @@ test('generated n8n adapter handles a form submission without executing Support 
       conversationId: 9001,
       messageId: 'message-form-1',
       submittedValues: [{ name: 'email', value: 'player@example.test' }],
-      helioRuntime: { agentBotId: 42, runtimeRevision: 'runtime-test' },
+      accountId: 7,
+      helioRuntime: {
+        agentBotId: 42,
+        runtimeRevision: 'runtime-test',
+        accessToken: 'bot-token',
+        helioBaseUrl: 'https://helio.test',
+      },
     },
     'Load Bot Config': {
       botConfigVersion: 12,
@@ -286,7 +415,13 @@ test('generated n8n adapter suppresses human-owned tickets without executing Sup
       conversationId: 9001,
       messageId: 'message-human-owned-1',
       content: 'Are you there?',
-      helioRuntime: { agentBotId: 42, runtimeRevision: 'runtime-test' },
+      accountId: 7,
+      helioRuntime: {
+        agentBotId: 42,
+        runtimeRevision: 'runtime-test',
+        accessToken: 'bot-token',
+        helioBaseUrl: 'https://helio.test',
+      },
     },
     'Load Bot Config': {
       botConfigVersion: 12,

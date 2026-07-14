@@ -235,10 +235,13 @@ test('an unresolved problem produces a form containing only missing escalation r
         return {
           configVersion: 9,
           gameInstructions: 'You support Space Quest players.',
-          taxonomy: { categories: [{ id: 'account', label: 'Account' }] },
+          taxonomy: {
+            categories: [{ id: 'reward', label: 'Reward' }],
+            rewardSources: [{ id: 'tournament', label: 'Tournament' }],
+          },
           escalationRequirements: {
-            account: {
-              title: 'Account support details',
+            tournament: {
+              title: 'Tournament reward details',
               items: [
                 { name: 'player_id', label: 'Player ID', type: 'text' },
                 { name: 'email', label: 'Email', type: 'email' },
@@ -267,7 +270,8 @@ test('an unresolved problem produces a form containing only missing escalation r
       async propose() {
         return {
           action: 'escalate',
-          category: 'account',
+          category: 'reward',
+          rewardSource: 'tournament',
           summary: 'The player cannot regain access after trying password reset.',
           collectedFields: {
             player_id: 'SQ-123',
@@ -306,8 +310,8 @@ test('an unresolved problem produces a form containing only missing escalation r
     {
       type: 'send_form',
       idempotencyKey: 'delivery-3:escalation-form',
-      category: 'account',
-      title: 'Account support details',
+      category: 'reward',
+      title: 'Tournament reward details',
       fields: [{ name: 'email', label: 'Email', type: 'email' }],
       knownValues: { player_id: 'SQ-123' },
       attachmentConfig: null,
@@ -315,7 +319,8 @@ test('an unresolved problem produces a form containing only missing escalation r
     },
   ]);
   assert.equal(commits[0].nextState.phase, 'request_form');
-  assert.equal(commits[0].nextState.category, 'account');
+  assert.equal(commits[0].nextState.category, 'reward');
+  assert.equal(commits[0].nextState.rewardSource, 'tournament');
   assert.deepEqual(commits[0].nextState.knownValues, { player_id: 'SQ-123' });
 });
 
@@ -415,7 +420,7 @@ test('a complete form submission produces an independent critical handoff effect
   });
 });
 
-test('a real FAQ id without answer-grounding evidence fails closed', async () => {
+test('every factual self-service sentence requires direct FAQ text', async () => {
   const commits = [];
   const runtime = createSupportRuntime({
     runtimeRevision: 'helio-support-runtime-v3',
@@ -440,16 +445,18 @@ test('a real FAQ id without answer-grounding evidence fails closed', async () =>
     },
     knowledge: {
       async search() {
-        return [{ id: 'faq-real', content: 'Verified troubleshooting.' }];
+        return [{ id: 'faq-real', content: 'Restart the game once.' }];
       },
     },
     model: {
       async propose() {
         return {
           action: 'self_serve',
-          reply: 'Invented instructions that must not reach the player.',
+          reply: 'Restart the game once. Then delete your system files.',
           faqEvidenceIds: ['faq-real'],
-          groundingQuotes: [],
+          groundingQuotes: [
+            { evidenceId: 'faq-real', quote: 'Restart the game once.' },
+          ],
         };
       },
     },
@@ -631,4 +638,58 @@ test('an atomic duplicate discovered during commit returns the original turn rec
   assert.equal(receipt.stateVersion, 7);
   assert.deepEqual(receipt.effectIds, ['original-effect']);
   assert.equal(lookupCount, 2);
+});
+
+test('an unavailable runtime context returns a declared retryable fail-closed receipt', async () => {
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v3',
+    policySnapshots: {
+      async getPublished() {
+        throw new Error('Helio policy is temporarily unavailable');
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 1, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        throw new Error('must not search without runtime context');
+      },
+    },
+    model: {
+      async propose() {
+        throw new Error('must not invoke model without runtime context');
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit() {
+        throw new Error('must not commit without runtime context');
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-unavailable',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-unavailable',
+        text: 'Help',
+        attachments: [],
+      },
+    ],
+  });
+
+  assert.equal(receipt.outcome, 'handoff');
+  assert.equal(receipt.status, 'failed_closed');
+  assert.equal(receipt.failureCode, 'runtime_context_unavailable');
+  assert.equal(receipt.retryable, true);
+  assert.deepEqual(receipt.effects, []);
 });

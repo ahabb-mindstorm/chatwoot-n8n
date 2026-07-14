@@ -7,18 +7,37 @@ export function createSupportRuntime(dependencies) {
     async handleTurn(input) {
       assertTurnEnvelope(input);
 
-      const duplicate = await dependencies.turns.findByDeliveryId(input.deliveryId);
+      let duplicate;
+      try {
+        duplicate = await dependencies.turns.findByDeliveryId(input.deliveryId);
+      } catch {
+        return unavailableReceipt(
+          input,
+          dependencies.runtimeRevision,
+          'turn_ledger_unavailable',
+        );
+      }
       if (duplicate) {
         return { ...duplicate, status: 'duplicate' };
       }
 
-      const [policy, ticketState] = await Promise.all([
-        dependencies.policySnapshots.getPublished(input.agentBotId),
-        dependencies.ticketStates.load({
-          agentBotId: input.agentBotId,
-          conversationId: input.conversationId,
-        }),
-      ]);
+      let policy;
+      let ticketState;
+      try {
+        [policy, ticketState] = await Promise.all([
+          dependencies.policySnapshots.getPublished(input.agentBotId),
+          dependencies.ticketStates.load({
+            agentBotId: input.agentBotId,
+            conversationId: input.conversationId,
+          }),
+        ]);
+      } catch {
+        return unavailableReceipt(
+          input,
+          dependencies.runtimeRevision,
+          'runtime_context_unavailable',
+        );
+      }
       if (ticketState.phase === 'human_owned') {
         const commitResult = await commitTurn(dependencies.turns, {
           deliveryId: input.deliveryId,
@@ -33,6 +52,13 @@ export function createSupportRuntime(dependencies) {
           policyVersion: policy.configVersion,
         });
         if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;
+        if (commitResult.unavailable) {
+          return unavailableReceipt(
+            input,
+            dependencies.runtimeRevision,
+            'turn_commit_unavailable',
+          );
+        }
         const committed = commitResult.committed;
         return {
           deliveryId: input.deliveryId,
@@ -74,9 +100,12 @@ export function createSupportRuntime(dependencies) {
             ticketState,
           );
         }
-      } catch {
+      } catch (error) {
         status = 'failed_closed';
-        failureCode = 'invalid_runtime_proposal';
+        failureCode =
+          error?.code === 'invalid_runtime_proposal'
+            ? 'invalid_runtime_proposal'
+            : 'runtime_dependency_unavailable';
         decision = {
           outcome: 'handoff',
           failedClosed: true,
@@ -98,6 +127,13 @@ export function createSupportRuntime(dependencies) {
         ...(failureCode ? { failureCode } : {}),
       });
       if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;
+      if (commitResult.unavailable) {
+        return unavailableReceipt(
+          input,
+          dependencies.runtimeRevision,
+          'turn_commit_unavailable',
+        );
+      }
       const committed = commitResult.committed;
 
       return {
@@ -119,13 +155,35 @@ export function createSupportRuntime(dependencies) {
   };
 }
 
+function unavailableReceipt(input, runtimeRevision, failureCode) {
+  return {
+    deliveryId: input.deliveryId,
+    outcome: 'handoff',
+    status: 'failed_closed',
+    runtimeRevision: runtimeRevision || DEFAULT_RUNTIME_REVISION,
+    policyVersion: null,
+    stateVersion: null,
+    effectIds: [],
+    effects: [],
+    failureCode,
+    retryable: true,
+  };
+}
+
 async function commitTurn(turns, turn) {
   try {
     return { committed: await turns.commit(turn) };
   } catch (error) {
-    if (error?.code !== 'duplicate_delivery') throw error;
-    const receipt = await turns.findByDeliveryId(turn.deliveryId);
-    if (!receipt) throw error;
+    if (error?.code !== 'duplicate_delivery') {
+      return { unavailable: true };
+    }
+    let receipt;
+    try {
+      receipt = await turns.findByDeliveryId(turn.deliveryId);
+    } catch {
+      return { unavailable: true };
+    }
+    if (!receipt) return { unavailable: true };
     return { duplicateReceipt: { ...receipt, status: 'duplicate' } };
   }
 }
@@ -152,7 +210,9 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
       evidenceIds.length === 0 ||
       evidenceIds.some((evidenceId) => !availableEvidence.has(evidenceId))
     ) {
-      throw new Error('Self-service proposal requires current-turn FAQ evidence');
+      throw invalidRuntimeProposal(
+        'Self-service proposal requires current-turn FAQ evidence',
+      );
     }
     const groundingQuotes = Array.isArray(proposal.groundingQuotes)
       ? proposal.groundingQuotes
@@ -174,14 +234,34 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
         );
       })
     ) {
-      throw new Error('Self-service reply is not grounded in cited FAQ text');
+      throw invalidRuntimeProposal(
+        'Self-service reply is not grounded in cited FAQ text',
+      );
+    }
+    const replySentences = reply
+      .split(/(?<=[.!?])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter(Boolean);
+    if (
+      replySentences.some(
+        (sentence) =>
+          !groundingQuotes.some((grounding) =>
+            includesNormalized(sentence, grounding.quote),
+          ),
+      )
+    ) {
+      throw invalidRuntimeProposal(
+        'Every self-service sentence requires cited FAQ text',
+      );
     }
     return { outcome: 'self_serve', reply, evidenceIds, groundingQuotes };
   }
 
   if (proposal.action === 'escalate') {
     if (ticketState.selfServeAttempted !== true) {
-      throw new Error('Escalation requires a prior self-service attempt');
+      throw invalidRuntimeProposal(
+        'Escalation requires a prior self-service attempt',
+      );
     }
     const escalation = resolveEscalationDecision({
       policy,
@@ -195,7 +275,9 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
     };
   }
 
-  throw new Error(`Unsupported runtime action: ${proposal?.action || 'missing'}`);
+  throw invalidRuntimeProposal(
+    `Unsupported runtime action: ${proposal?.action || 'missing'}`,
+  );
 }
 
 function transitionTicketState(ticketState, decision) {
@@ -210,6 +292,7 @@ function transitionTicketState(ticketState, decision) {
       ? { selfServeAttempted: true }
       : {}),
     ...(decision.category ? { category: decision.category } : {}),
+    ...(decision.rewardSource ? { rewardSource: decision.rewardSource } : {}),
     ...(decision.knownValues ? { knownValues: decision.knownValues } : {}),
     ...(decision.summary ? { summary: decision.summary } : {}),
   };
@@ -290,7 +373,9 @@ function buildEffects(deliveryId, decision) {
 function authorizeFormSubmission(event, policy, ticketState) {
   const category = String(ticketState.category || '').trim();
   if (ticketState.phase !== 'request_form' || !category) {
-    throw new Error('Form submission requires pending escalation requirements');
+    throw invalidRuntimeProposal(
+      'Form submission requires pending escalation requirements',
+    );
   }
   return {
     ...resolveEscalationDecision({
@@ -312,7 +397,9 @@ function resolveEscalationDecision({
   const category = String(categoryInput || '').trim();
   const configuredCategories = taxonomyValues(policy.taxonomy?.categories);
   if (!configuredCategories.has(category)) {
-    throw new Error(`Escalation category is not configured: ${category || 'missing'}`);
+    throw invalidRuntimeProposal(
+      `Escalation category is not configured: ${category || 'missing'}`,
+    );
   }
 
   const rewardSource = category === 'reward'
@@ -326,7 +413,7 @@ function resolveEscalationDecision({
     configuredRewardSources.size > 0 &&
     !configuredRewardSources.has(rewardSource)
   ) {
-    throw new Error(
+    throw invalidRuntimeProposal(
       `Reward source is not configured: ${rewardSource || 'missing'}`,
     );
   }
@@ -339,7 +426,9 @@ function resolveEscalationDecision({
       ? requirement.fields
       : [];
   if (fields.length === 0) {
-    throw new Error(`Escalation requirements are missing for category: ${category}`);
+    throw invalidRuntimeProposal(
+      `Escalation requirements are missing for category: ${category}`,
+    );
   }
   const allowedFieldNames = new Set(fields.map((field) => field.name).filter(Boolean));
   const requiredFieldNames = new Set(
@@ -389,7 +478,7 @@ function taxonomyValues(items) {
 function requiredReply(proposal) {
   const reply = String(proposal.reply || '').trim();
   if (!reply) {
-    throw new Error('Runtime proposal requires a non-empty reply');
+    throw invalidRuntimeProposal('Runtime proposal requires a non-empty reply');
   }
   return reply;
 }
@@ -416,6 +505,12 @@ function includesNormalized(text, expected) {
       .replace(/\s+/g, ' ')
       .trim();
   return normalize(text).includes(normalize(expected));
+}
+
+function invalidRuntimeProposal(message) {
+  const error = new Error(message);
+  error.code = 'invalid_runtime_proposal';
+  return error;
 }
 
 function assertDependencies(dependencies) {

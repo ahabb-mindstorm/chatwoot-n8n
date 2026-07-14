@@ -29,6 +29,30 @@ ALTER TABLE bot_outbound_effects
   ADD CONSTRAINT bot_outbound_effects_status_check
   CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'dead_letter'));
 
+UPDATE bot_outbound_effects
+   SET agent_bot_id = 0
+ WHERE agent_bot_id IS NULL;
+
+ALTER TABLE bot_outbound_effects
+  ALTER COLUMN agent_bot_id SET DEFAULT 0,
+  ALTER COLUMN agent_bot_id SET NOT NULL;
+
+ALTER TABLE bot_outbound_effects
+  DROP CONSTRAINT IF EXISTS bot_outbound_effects_effect_key_key;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'bot_outbound_effects_bot_effect_unique'
+       AND conrelid = 'bot_outbound_effects'::regclass
+  ) THEN
+    ALTER TABLE bot_outbound_effects
+      ADD CONSTRAINT bot_outbound_effects_bot_effect_unique
+      UNIQUE (agent_bot_id, effect_key);
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION bot_commit_support_turn(
   p_account_id BIGINT,
   p_conversation_id BIGINT,
@@ -179,6 +203,10 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS bot_claim_outbound_effect(
+  BIGINT, BIGINT, TEXT, TEXT, TEXT, JSONB, TEXT, INTEGER
+);
+
 CREATE OR REPLACE FUNCTION bot_claim_outbound_effect(
   p_account_id BIGINT,
   p_conversation_id BIGINT,
@@ -187,7 +215,8 @@ CREATE OR REPLACE FUNCTION bot_claim_outbound_effect(
   p_effect_type TEXT,
   p_request_data JSONB,
   p_owner TEXT,
-  p_lease_seconds INTEGER DEFAULT 300
+  p_lease_seconds INTEGER DEFAULT 300,
+  p_agent_bot_id BIGINT DEFAULT 0
 )
 RETURNS TABLE (should_run BOOLEAN, effect_key TEXT, reason TEXT)
 LANGUAGE plpgsql
@@ -196,18 +225,19 @@ DECLARE
   v_status TEXT;
 BEGIN
   INSERT INTO bot_outbound_effects (
-    account_id, conversation_id, batch_id, effect_key, effect_type,
+    account_id, conversation_id, agent_bot_id, batch_id, effect_key, effect_type,
     request_data, request_hash, lease_owner, lease_until
   ) VALUES (
-    p_account_id, p_conversation_id, p_batch_id, p_effect_key, p_effect_type,
+    p_account_id, p_conversation_id, COALESCE(p_agent_bot_id, 0), p_batch_id, p_effect_key, p_effect_type,
     COALESCE(p_request_data, '{}'::jsonb), md5(COALESCE(p_request_data, '{}'::jsonb)::TEXT),
     p_owner, clock_timestamp() + make_interval(secs => GREATEST(p_lease_seconds, 30))
   )
-  ON CONFLICT ON CONSTRAINT bot_outbound_effects_effect_key_key DO NOTHING;
+  ON CONFLICT ON CONSTRAINT bot_outbound_effects_bot_effect_unique DO NOTHING;
 
   SELECT status INTO v_status
     FROM bot_outbound_effects
-   WHERE bot_outbound_effects.effect_key = p_effect_key;
+   WHERE bot_outbound_effects.agent_bot_id = COALESCE(p_agent_bot_id, 0)
+     AND bot_outbound_effects.effect_key = p_effect_key;
   IF v_status = 'completed' THEN
     RETURN QUERY SELECT FALSE, p_effect_key, 'completed'::TEXT;
     RETURN;
@@ -218,7 +248,8 @@ BEGIN
          lease_until = clock_timestamp() + make_interval(secs => GREATEST(p_lease_seconds, 30)),
          attempts = CASE WHEN lease_owner IS DISTINCT FROM p_owner THEN attempts + 1 ELSE attempts END,
          updated_at = clock_timestamp()
-   WHERE bot_outbound_effects.effect_key = p_effect_key
+   WHERE bot_outbound_effects.agent_bot_id = COALESCE(p_agent_bot_id, 0)
+     AND bot_outbound_effects.effect_key = p_effect_key
      AND (lease_owner = p_owner OR lease_until IS NULL OR lease_until <= clock_timestamp()
           OR status IN ('pending', 'failed'));
 

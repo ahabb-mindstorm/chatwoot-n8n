@@ -12,9 +12,15 @@ const runtimeArtifactPath = join(
   'artifacts',
   'helio-support-runtime.json',
 );
+const runtimeRevisionRegistryPath = join(
+  repoRoot,
+  'factory',
+  'artifacts',
+  'runtime-revisions.json',
+);
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v8';
+export const RUNTIME_REVISION = 'helio-support-runtime-v10';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',
@@ -146,10 +152,6 @@ const LEGACY_RUNTIME_EFFECT_NODES = new Set([
 
 /** Schedules/recovery only — ingress must keep verify/ingest/respond nodes. */
 const INGRESS_SCHEDULE_DROP = new Set([
-  'Recovery Schedule',
-  'Load Recovery Switch',
-  'Recovery Enabled?',
-  'Recover Next Batch',
   'Cleanup Schedule',
   'Cleanup Idempotency Records',
 ]);
@@ -197,6 +199,15 @@ export function renderIngressWorkflow(template, spec, options) {
     parameters: {
       method: 'POST',
       url: options.supportRuntimeWebhookUrl,
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [
+          {
+            name: 'x-helio-runtime-secret',
+            value: '={{ $env.BOT_FACTORY_API_SECRET }}',
+          },
+        ],
+      },
       sendBody: true,
       specifyBody: 'json',
       jsonBody: `={{ JSON.stringify({ agentBotId: ${spec.bot.id}, accountId: ${spec.accountId}, inboxId: ${spec.inboxId}, gameId: ${JSON.stringify(spec.gameId)}, accessToken: ${JSON.stringify(spec.bot.accessToken)}, webhookSecret: ${JSON.stringify(spec.bot.webhookSecret)}, helioBaseUrl: ${JSON.stringify(helioBaseUrl)}, configUrl: ${JSON.stringify(configUrl)}, ragTableName: ${JSON.stringify(ragTableName(spec))}, memoryTableName: ${JSON.stringify(memoryTableName(spec))}, memorySessionPrefix: ${JSON.stringify(memorySessionPrefix(spec))}, systemMessage: ${JSON.stringify(spec.systemMessage || '')}, claimedBatch: $json }) }}`,
@@ -214,6 +225,14 @@ export function renderIngressWorkflow(template, spec, options) {
     main: [[{ node: 'Invoke Support Runtime', type: 'main', index: 0 }]],
   };
   workflow.connections['Invoke Support Runtime'] = { main: [[]] };
+  if (workflow.nodes.some((node) => node.name === 'Has Claimed Batch?')) {
+    workflow.connections['Has Claimed Batch?'] = {
+      main: [
+        [{ node: 'Invoke Support Runtime', type: 'main', index: 0 }],
+        [],
+      ],
+    };
+  }
 
   sanitizeProGolfVocabulary(workflow);
   return workflow;
@@ -221,11 +240,23 @@ export function renderIngressWorkflow(template, spec, options) {
 
 export function renderSharedSupportRuntime(_template, options = {}) {
   const revision = options.revision || RUNTIME_REVISION;
-  const artifact = JSON.parse(readFileSync(runtimeArtifactPath, 'utf8'));
+  const artifactSource = readFileSync(runtimeArtifactPath, 'utf8');
+  const artifact = JSON.parse(artifactSource);
+  const revisionRegistry = JSON.parse(
+    readFileSync(runtimeRevisionRegistryPath, 'utf8'),
+  );
   if (artifact?.meta?.runtimeRevision !== revision) {
     throw new Error(
       `Support runtime artifact revision ${artifact?.meta?.runtimeRevision || 'missing'} does not match ${revision}`,
     );
+  }
+  const expectedDigest = String(revisionRegistry[revision] || '');
+  const actualDigest = crypto
+    .createHash('sha256')
+    .update(artifactSource)
+    .digest('hex');
+  if (!expectedDigest || actualDigest !== expectedDigest) {
+    throw new Error(`Support runtime artifact digest mismatch for ${revision}`);
   }
   const workflow = cloneWithoutN8nIdentity(artifact);
   const webhook = workflow.nodes.find(
@@ -240,7 +271,7 @@ export function renderSharedSupportRuntime(_template, options = {}) {
   return workflow;
 }
 
-/** Build-time migration helper. Production Factory publication loads the owned artifact above. */
+/** Refresh the owned generic artifact with current runtime code and contract. */
 export function buildSharedSupportRuntimeArtifact(template, options = {}) {
   const revision = options.revision || RUNTIME_REVISION;
   const workflow = cloneWithoutN8nIdentity(template);
@@ -260,7 +291,11 @@ export function buildSharedSupportRuntimeArtifact(template, options = {}) {
   rewireSharedRuntimeAfterTypingDrop(workflow);
 
   const path = supportRuntimeWebhookPath(revision);
-  const webhook = workflow.nodes.find((node) => node.name === 'Chatwoot Bot Events');
+  const webhook = workflow.nodes.find(
+    (node) =>
+      node.name === 'Chatwoot Bot Events' ||
+      node.name === 'Support Runtime Webhook',
+  );
   if (webhook) {
     webhook.name = 'Support Runtime Webhook';
     webhook.parameters = {
@@ -274,6 +309,9 @@ export function buildSharedSupportRuntimeArtifact(template, options = {}) {
     webhook.notes = `Ingress workflows POST claimed batches here: ${webhookUrl(options.webhookBaseUrl, path)}`;
   }
 
+  workflow.nodes = workflow.nodes.filter(
+    (node) => node.name !== 'Accept Runtime Payload',
+  );
   workflow.nodes.push({
     parameters: { mode: 'runOnceForEachItem', jsCode: acceptRuntimePayloadJs() },
     id: deterministicId(path, 'accept'),
@@ -331,6 +369,14 @@ export function buildSharedSupportRuntimeArtifact(template, options = {}) {
 
 function acceptRuntimePayloadJs() {
   return `const raw = $input.item?.json || {};
+const headers = raw.headers && typeof raw.headers === 'object' ? raw.headers : {};
+const expectedSecret = String($env.BOT_FACTORY_API_SECRET || '').trim();
+const providedSecret = String(
+  headers['x-helio-runtime-secret'] || headers['X-Helio-Runtime-Secret'] || '',
+).trim();
+if (!expectedSecret || providedSecret !== expectedSecret) {
+  throw new Error('Unauthorized support runtime invocation');
+}
 const body = raw.body && typeof raw.body === 'object' ? raw.body : raw;
 const claimed = body.claimedBatch && typeof body.claimedBatch === 'object' ? body.claimedBatch : {};
 const agentBotId = Number(body.agentBotId);
@@ -407,9 +453,16 @@ const botConfig = config.botConfig && typeof config.botConfig === 'object' ? con
 const gameInstructions = config.systemMessage || botConfig.systemMessage || runtime.systemMessage || '';
 const instructions = String(gameInstructions || '').trim();
 const contract = String(runtimeContract || '').trim();
-const composed = contract && instructions
+const policyContext = JSON.stringify({
+  taxonomy: botConfig.taxonomy || {},
+  escalationRequirements:
+    botConfig.escalationRequirements || botConfig.escalation_requirements || {},
+});
+const baseInstructions = contract && instructions
   ? contract + '\\n\\n## Game instructions\\n' + instructions
   : (contract || instructions || null);
+const composed = String(baseInstructions || '') +
+  '\\n\\n## Published bot policy\\n' + policyContext;
 
 return {
   json: {
@@ -644,6 +697,10 @@ function patchRuntimeTaxonomyNodes(workflow) {
         schema.properties.action.description =
           'Use reply only for non-factual greetings, closings, or scope redirects; clarify for a focused question; self_serve for every factual FAQ-grounded answer; escalate for a form; handoff for an authorized direct human transfer.';
       }
+      if (schema.properties?.reply) {
+        schema.properties.reply.description =
+          'Plain-text message shown to the player. Do not use Markdown, repeat answered questions, or mention retrieval internals. Redirect unrelated questions to this game\'s support topics. Every factual claim, troubleshooting step, or optimization claim must be directly supported by exact current-turn FAQ evidence; do not infer effects or outcomes that are not explicit in that evidence.';
+      }
       schema.properties.faq_evidence_ids = {
         type: 'array',
         items: { type: 'string' },
@@ -676,16 +733,7 @@ function patchRuntimeTaxonomyNodes(workflow) {
         'grounding_quotes',
       ];
       schema.additionalProperties = false;
-      let schemaText = JSON.stringify(schema, null, 2);
-      schemaText = schemaText
-        .replace(/redirect to Pro Golf support only/gi, "redirect to this game's support topics only")
-        .replace(
-          /For club\/equipment or gameplay optimization questions[^.]*\./gi,
-          'For gameplay optimization questions, do not include improvement advice unless the exact causal effect appears in retrieved FAQ content.',
-        )
-        .replace(/\bPro Golf\b/gi, 'this game')
-        .replace(/\bprogolf\b/gi, 'this game');
-      parser.parameters.inputSchema = schemaText;
+      parser.parameters.inputSchema = JSON.stringify(schema, null, 2);
     } catch {
       // Keep template schema if unparsable.
     }

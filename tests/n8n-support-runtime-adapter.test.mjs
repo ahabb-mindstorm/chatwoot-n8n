@@ -8,6 +8,7 @@ import {
   buildN8nSupportRuntimeAdapterSource,
   executeN8nRuntimeEffects,
   normalizeN8nFaqEvidence,
+  normalizeN8nProposal,
 } from '../runtime/n8n-support-runtime-adapter.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -111,6 +112,28 @@ test('generated n8n adapter delegates turn persistence instead of using workflow
   assert.match(source, /\/runtime\/turns\/find/);
   assert.match(source, /\/runtime\/turns\/commit/);
   assert.match(source, /retryable_runtime_failure/);
+  assert.match(source, /\$execution\.id/);
+});
+
+test('proposal adapter preserves invalid raw shape for strict validation', () => {
+  const proposal = normalizeN8nProposal({
+    output: {
+      action: 'escalate',
+      reply: 42,
+      category: 'account',
+      summary: '',
+      reward_source: '',
+      collected_fields: [],
+      handoff_override_reason: '',
+      faq_evidence_ids: [],
+      unexpected_field: true,
+    },
+  });
+
+  assert.equal(proposal.reply, 42);
+  assert.deepEqual(proposal.collectedFields, []);
+  assert.equal(proposal.unexpected_field, true);
+  assert.equal(Object.hasOwn(proposal, 'groundingQuotes'), false);
 });
 
 test('typed effect executor opens human handoff before noncritical decoration', async () => {
@@ -143,6 +166,7 @@ test('typed effect executor opens human handoff before noncritical decoration', 
         helioBaseUrl: 'https://helio.test',
         runtimeRevision: 'helio-support-runtime-v6',
       },
+      executionOwner: 'n8n:execution-1001',
     },
     async persistenceRequest(path, body) {
       calls.push({ kind: 'persistence', path, body });
@@ -169,6 +193,10 @@ test('typed effect executor opens human handoff before noncritical decoration', 
     'delivery-handoff:open',
     'delivery-handoff:note',
   ]);
+  const claims = calls.filter(
+    (call) => call.kind === 'persistence' && call.path.endsWith('/claim'),
+  );
+  assert.ok(claims.every((call) => call.body.owner === 'n8n:execution-1001'));
 });
 
 test('typed effect executor leaves failed critical effects retryable', async () => {
@@ -266,6 +294,88 @@ test('typed effect executor retries failed noncritical effects after opening for
   );
   assert.match(helioPaths[0], /toggle_status$/);
   assert.match(helioPaths[1], /messages$/);
+});
+
+test('typed effect executor treats a busy claim as retryable', async () => {
+  await assert.rejects(
+    executeN8nRuntimeEffects({
+      receipt: {
+        deliveryId: 'delivery-busy',
+        effects: [{
+          type: 'send_public_message',
+          idempotencyKey: 'delivery-busy:reply',
+          text: 'Hello',
+          critical: true,
+        }],
+      },
+      accept: {
+        accountId: 7,
+        conversationId: 9001,
+        executionOwner: 'n8n:execution-2',
+        helioRuntime: { agentBotId: 42 },
+      },
+      async persistenceRequest(path) {
+        if (path.endsWith('/claim')) {
+          return { shouldRun: false, reason: 'busy' };
+        }
+        throw new Error(`Unexpected persistence path: ${path}`);
+      },
+      async httpRequest() {
+        throw new Error('Busy effects must not execute');
+      },
+    }),
+    (error) =>
+      error.code === 'effect_claim_busy' &&
+      error.execution.deferredEffectIds.includes('delivery-busy:reply'),
+  );
+});
+
+test('typed effect executor defers confirmation when opening for human fails', async () => {
+  const requestedPaths = [];
+  await assert.rejects(
+    executeN8nRuntimeEffects({
+      receipt: {
+        deliveryId: 'delivery-open-failure',
+        effects: [
+          {
+            type: 'open_for_human',
+            idempotencyKey: 'delivery-open-failure:open',
+            critical: true,
+          },
+          {
+            type: 'send_public_message',
+            idempotencyKey: 'delivery-open-failure:reply',
+            text: 'Sent to the team.',
+            critical: false,
+            requires: ['delivery-open-failure:open'],
+          },
+        ],
+      },
+      accept: {
+        accountId: 7,
+        conversationId: 9001,
+        executionOwner: 'n8n:execution-3',
+        helioRuntime: {
+          agentBotId: 42,
+          accessToken: 'bot-token',
+          helioBaseUrl: 'https://helio.test',
+        },
+      },
+      async persistenceRequest(path) {
+        if (path.endsWith('/claim')) return { shouldRun: true };
+        return { ok: true };
+      },
+      async httpRequest(request) {
+        requestedPaths.push(new URL(request.url).pathname);
+        throw new Error('open failed');
+      },
+    }),
+    (error) =>
+      error.code === 'critical_effect_failed' &&
+      error.execution.deferredEffectIds.includes('delivery-open-failure:reply'),
+  );
+  assert.equal(requestedPaths.length, 1);
+  assert.match(requestedPaths[0], /toggle_status$/);
 });
 
 test('generated n8n adapter executes a grounded proposal through SupportRuntime', async () => {

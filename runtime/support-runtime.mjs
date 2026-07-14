@@ -472,6 +472,7 @@ function buildEffects(deliveryId, decision) {
         idempotencyKey: `${deliveryId}:safe-fallback-reply`,
         text: 'I could not safely complete that request, so I have sent it to the team.',
         critical: false,
+        requires: [`${deliveryId}:open-for-human`],
       },
       {
         type: 'open_for_human',
@@ -517,6 +518,7 @@ function buildEffects(deliveryId, decision) {
         idempotencyKey: `${deliveryId}:handoff-reply`,
         text: 'Thanks — I have sent this to the team.',
         critical: false,
+        requires: [`${deliveryId}:open-for-human`],
       },
       {
         type: 'open_for_human',

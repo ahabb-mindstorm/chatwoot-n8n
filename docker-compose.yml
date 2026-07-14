@@ -82,7 +82,9 @@ services:
     restart: unless-stopped
 
   bot-factory:
-    image: node:22-alpine
+    build:
+      context: .
+      dockerfile: factory/Dockerfile
     working_dir: /app
     depends_on:
       - n8n

@@ -123,34 +123,49 @@ export function normalizeN8nTicketState(ticketState) {
 export function normalizeN8nProposal(agentItem) {
   const item = n8nObject(agentItem);
   const output = n8nObject(item.output || item);
-  return {
-    action: String(output.action || '').trim(),
-    reply: String(output.reply || '').trim(),
-    category: String(output.category || '').trim(),
-    summary: String(output.summary || '').trim(),
-    rewardSource: String(output.rewardSource || output.reward_source || '').trim(),
-    collectedFields: n8nObject(
-      output.collectedFields || output.collected_fields,
-    ),
-    handoffOverrideReason: String(
-      output.handoffOverrideReason || output.handoff_override_reason || '',
-    ).trim(),
-    faqEvidenceIds: (
-      Array.isArray(output.faqEvidenceIds)
-        ? output.faqEvidenceIds
-        : output.faq_evidence_ids
-    ) || [],
-    groundingQuotes: (
-      Array.isArray(output.groundingQuotes)
-        ? output.groundingQuotes
-        : output.grounding_quotes
-    || []).map((grounding) => ({
-      evidenceId: String(
-        grounding?.evidenceId || grounding?.evidence_id || '',
-      ).trim(),
-      quote: String(grounding?.quote || '').trim(),
-    })),
+  const aliases = {
+    action: 'action',
+    reply: 'reply',
+    category: 'category',
+    summary: 'summary',
+    rewardSource: 'rewardSource',
+    reward_source: 'rewardSource',
+    collectedFields: 'collectedFields',
+    collected_fields: 'collectedFields',
+    handoffOverrideReason: 'handoffOverrideReason',
+    handoff_override_reason: 'handoffOverrideReason',
+    faqEvidenceIds: 'faqEvidenceIds',
+    faq_evidence_ids: 'faqEvidenceIds',
+    groundingQuotes: 'groundingQuotes',
+    grounding_quotes: 'groundingQuotes',
   };
+  const proposal = {};
+  for (const [rawKey, value] of Object.entries(output)) {
+    const canonicalKey = aliases[rawKey] || rawKey;
+    if (Object.hasOwn(proposal, canonicalKey)) {
+      proposal[rawKey] = value;
+      continue;
+    }
+    proposal[canonicalKey] = canonicalKey === 'groundingQuotes'
+      ? mapN8nGroundingQuotes(value)
+      : value;
+  }
+  return proposal;
+}
+
+function mapN8nGroundingQuotes(value) {
+  if (!Array.isArray(value)) return value;
+  return value.map((grounding) => {
+    if (!grounding || typeof grounding !== 'object' || Array.isArray(grounding)) {
+      return grounding;
+    }
+    return Object.fromEntries(
+      Object.entries(grounding).map(([key, child]) => [
+        key === 'evidence_id' ? 'evidenceId' : key,
+        child,
+      ]),
+    );
+  });
 }
 
 export function legacyOutputFromRuntimeReceipt(receipt, proposal, nextState) {
@@ -330,13 +345,24 @@ export async function executeN8nRuntimeEffects({
   const skippedEffectIds = [];
   const failedEffectIds = [];
   const criticalFailures = [];
-  const owner = [
-    accept?.helioRuntime?.runtimeRevision || receipt?.runtimeRevision || 'runtime',
+  const deferredEffectIds = [];
+  const successfulEffectIds = new Set();
+  const owner = String(accept?.executionOwner || '').trim() || [
+    'runtime',
     receipt?.deliveryId || 'turn',
+    Date.now(),
+    Math.random().toString(36).slice(2),
   ].join(':');
 
   for (const effect of orderedEffects) {
     const effectId = String(effect?.idempotencyKey || '');
+    const requirements = Array.isArray(effect?.requires)
+      ? effect.requires.map(String)
+      : [];
+    if (requirements.some((requiredId) => !successfulEffectIds.has(requiredId))) {
+      deferredEffectIds.push(effectId);
+      continue;
+    }
     try {
       const claim = await persistenceRequest('/runtime/effects/claim', {
         accountId: Number(accept?.accountId || accept?.helioRuntime?.accountId),
@@ -347,7 +373,12 @@ export async function executeN8nRuntimeEffects({
         effect,
       });
       if (claim?.shouldRun !== true) {
-        skippedEffectIds.push(effectId);
+        if (claim?.reason === 'completed') {
+          skippedEffectIds.push(effectId);
+          successfulEffectIds.add(effectId);
+        } else {
+          deferredEffectIds.push(effectId);
+        }
         continue;
       }
       const response = await httpRequest(n8nEffectRequest(effect, accept));
@@ -358,6 +389,7 @@ export async function executeN8nRuntimeEffects({
         remoteId: response?.id != null ? String(response.id) : null,
       });
       completedEffectIds.push(effectId);
+      successfulEffectIds.add(effectId);
     } catch (error) {
       failedEffectIds.push(effectId);
       await persistenceRequest('/runtime/effects/fail', {
@@ -373,6 +405,7 @@ export async function executeN8nRuntimeEffects({
     completedEffectIds,
     skippedEffectIds,
     failedEffectIds,
+    deferredEffectIds,
   };
   if (failedEffectIds.length > 0) {
     const hasCriticalFailure = criticalFailures.length > 0;
@@ -382,6 +415,14 @@ export async function executeN8nRuntimeEffects({
     error.code = hasCriticalFailure
       ? 'critical_effect_failed'
       : 'effect_execution_failed';
+    error.execution = execution;
+    throw error;
+  }
+  if (deferredEffectIds.length > 0) {
+    const error = new Error(
+      `Runtime effects deferred: ${deferredEffectIds.join(', ')}`,
+    );
+    error.code = 'effect_claim_busy';
     error.execution = execution;
     throw error;
   }
@@ -513,7 +554,12 @@ if (runtimeReceipt.retryable === true) {
 }
 const runtimeEffectExecution = await executeN8nRuntimeEffects({
   receipt: runtimeReceipt,
-  accept,
+  accept: {
+    ...accept,
+    executionOwner: typeof $execution !== 'undefined'
+      ? 'n8n:' + String($execution.id || '')
+      : '',
+  },
   persistenceRequest,
   httpRequest: this.helpers.httpRequest.bind(this.helpers),
 });
@@ -543,6 +589,7 @@ export function buildN8nSupportRuntimeAdapterSource(supportRuntimeSource) {
     n8nObject.toString(),
     normalizeN8nFaqEvidence.toString().replace(/^export\s+/, ''),
     normalizeN8nTicketState.toString().replace(/^export\s+/, ''),
+    mapN8nGroundingQuotes.toString(),
     normalizeN8nProposal.toString().replace(/^export\s+/, ''),
     legacyOutputFromRuntimeReceipt.toString().replace(/^export\s+/, ''),
     n8nHandoffNote.toString(),

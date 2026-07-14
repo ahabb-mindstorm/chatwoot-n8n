@@ -117,7 +117,7 @@ export function createPostgresRuntimePersistence(pool) {
       const effectId = requiredString(effect.idempotencyKey, 'effect.idempotencyKey');
       const effectType = requiredString(effect.type, 'effect.type');
       const result = await pool.query(
-        `SELECT * FROM bot_claim_outbound_effect($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+        `SELECT * FROM bot_claim_outbound_effect($1, $2, $3, $4, $5, $6::jsonb, $7, 300, $8)`,
         [
           accountId,
           conversationId,
@@ -126,6 +126,7 @@ export function createPostgresRuntimePersistence(pool) {
           effectType,
           JSON.stringify(effect),
           owner,
+          agentBotId,
         ],
       );
       const row = result.rows[0] || {};

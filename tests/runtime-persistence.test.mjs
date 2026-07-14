@@ -168,3 +168,39 @@ test('support runtime migration commits receipt, state version, and pending effe
   assert.match(migration, /'pending', 0/);
   assert.match(migration, /UPDATE bot_support_turns[\s\S]*receipt = v_receipt/);
 });
+
+test('support runtime migration runner applies every generic runtime prerequisite in order', () => {
+  const source = readFileSync(
+    new URL('../scripts/apply-support-runtime-migration.mjs', import.meta.url),
+    'utf8',
+  );
+  const ordered = [
+    '001_bot_support_state.sql',
+    '003_support_state.sql',
+    '006_idempotency_debounce.sql',
+    '007_agent_bot_kill_switch.sql',
+    '009_agent_bot_scoped_recovery.sql',
+    '010_agent_bot_scoped_claim.sql',
+    '011_agent_bot_scoped_ticket_state.sql',
+    '012_unscoped_recover_legacy_only.sql',
+    '013_support_runtime_turns.sql',
+  ];
+  let cursor = -1;
+  for (const migration of ordered) {
+    const next = source.indexOf(migration);
+    assert.ok(next > cursor, `${migration} must follow its prerequisites`);
+    cursor = next;
+  }
+});
+
+test('support runtime effects are idempotent within agent-bot scope', () => {
+  const migration = readFileSync(
+    new URL('../migrations/013_support_runtime_turns.sql', import.meta.url),
+    'utf8',
+  );
+  assert.match(migration, /UNIQUE \(agent_bot_id, effect_key\)/);
+  assert.match(
+    migration,
+    /bot_outbound_effects\.agent_bot_id = COALESCE\(p_agent_bot_id, 0\)/,
+  );
+});

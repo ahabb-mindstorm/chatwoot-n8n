@@ -1,0 +1,592 @@
+{
+  "name": "Helio Support Runtime (helio-support-runtime-v7)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "helio-support-runtime-helio-support-runtime-v7",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "6c05a5c9-a15e-4a59-b491-161f92bd370f",
+      "name": "Support Runtime Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        304
+      ],
+      "webhookId": "helio-support-runtime-helio-support-runtime-v7",
+      "notesInFlow": true,
+      "notes": "Ingress workflows POST claimed batches here: http://n8n:5678/webhook/helio-support-runtime-helio-support-runtime-v7"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (($json.category && $json.category !== 'other') || $json.rewardSource || $json.summary || Object.keys($json.knownValues || {}).length || (($json.customAttributes || {}).escalation_missing_fields) || (($json.customAttributes || {}).escalation_known_fields)) ? ('Player message: ' + ($json.content || '') + '\\n\\nExisting support context from this conversation:\\n' + (($json.category && $json.category !== 'other') ? ('- category: ' + $json.category + '\\n') : '') + ($json.rewardSource ? ('- reward_source: ' + $json.rewardSource + '\\n') : '') + ($json.summary ? ('- prior_summary: ' + $json.summary + '\\n') : '') + (Object.keys($json.knownValues || {}).length ? ('- known_values: ' + JSON.stringify($json.knownValues) + '\\n') : '') + ((($json.customAttributes || {}).escalation_missing_fields) ? ('- missing_fields_for_form: ' + (($json.customAttributes || {}).escalation_missing_fields) + '\\n') : '') + ((($json.customAttributes || {}).escalation_omitted_fields) ? ('- already_collected_fields: ' + (($json.customAttributes || {}).escalation_omitted_fields) + '\\n') : '')) : $json.content }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "={{ $('Load Bot Config').first().json.botSystemMessage }}",
+          "maxIterations": 4,
+          "enableStreaming": false,
+          "maxTokensFromMemory": 8000,
+          "returnIntermediateSteps": true
+        }
+      },
+      "id": "0b893e4f-d439-44be-a217-4d25057778d1",
+      "name": "Support Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        944,
+        128
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "responseFormat": "json_object",
+          "temperature": 0.1,
+          "timeout": 30000,
+          "maxRetries": 1
+        }
+      },
+      "id": "a12330c4-4b27-46ac-af61-89372578d797",
+      "name": "OpenAI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9802f55e-1853-46a2-aa28-46991afa9023",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"reply\",\n        \"clarify\",\n        \"self_serve\",\n        \"escalate\",\n        \"handoff\"\n      ],\n      \"description\": \"Use reply only for non-factual greetings, closings, or scope redirects; clarify for a focused question; self_serve for every factual FAQ-grounded answer; escalate for a form; handoff for an authorized direct human transfer.\"\n    },\n    \"reply\": {\n      \"type\": \"string\",\n      \"description\": \"Plain-text message shown to the player. Do not use Markdown syntax. Do not use inline numbered lists. Use line breaks for separate checks. Do not repeat the same question if the latest player message answers it; acknowledge the answer and move to the next step. Never mention retrieval, retrieved information, search results, knowledge base, FAQ search, or that nothing was found. If the player asks a clearly unrelated question, do not answer it; redirect to this game's support topics only. Plain text only: no Markdown syntax, no bullet symbols, no bold markers. For gameplay optimization questions, do not include improvement advice unless the exact causal effect appears in retrieved FAQ content. Never say upgrades improve shot distance, spin, accuracy, precision, control, or performance unless explicitly grounded.\"\n    },\n    \"category\": {\n      \"type\": \"string\",\n      \"description\": \"Support category slug from this bot's published taxonomy. Use other when unclear.\"\n    },\n    \"summary\": {\n      \"type\": \"string\",\n      \"description\": \"Internal summary for the human support agent\"\n    },\n    \"reward_source\": {\n      \"type\": \"string\",\n      \"description\": \"Reward source slug from this bot's published taxonomy when category is reward. Empty otherwise. Use unknown if unclear.\"\n    },\n    \"collected_fields\": {\n      \"type\": \"object\",\n      \"additionalProperties\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Explicit player-provided values for already answered form fields, keyed by the exact field names in the escalation field catalog. Use only known values and preserve relative dates such as yesterday verbatim.\"\n    },\n    \"handoff_override_reason\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"\",\n        \"critical\",\n        \"explicit_human_request\",\n        \"post_form_followup\"\n      ],\n      \"description\": \"Reason an incomplete case may bypass the form. Empty unless one of the documented forced-handoff cases applies.\"\n    },\n    \"faq_evidence_ids\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Exact document ids from Search FAQ Knowledge Base used by a self_serve reply. Empty for every other action.\"\n    },\n    \"grounding_quotes\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"evidence_id\": {\n            \"type\": \"string\"\n          },\n          \"quote\": {\n            \"type\": \"string\"\n          }\n        },\n        \"required\": [\n          \"evidence_id\",\n          \"quote\"\n        ],\n        \"additionalProperties\": false\n      },\n      \"description\": \"Direct quotes copied from current-turn FAQ documents. Every self_serve sentence must contain at least one quote. Empty for every other action.\"\n    }\n  },\n  \"required\": [\n    \"action\",\n    \"reply\",\n    \"category\",\n    \"summary\",\n    \"reward_source\",\n    \"collected_fields\",\n    \"handoff_override_reason\",\n    \"faq_evidence_ids\",\n    \"grounding_quotes\"\n  ],\n  \"additionalProperties\": false\n}",
+        "autoFix": true
+      },
+      "id": "6deea864-92f4-4e87-a75d-c470873bf158",
+      "name": "Agent Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "maxTokens": 450,
+          "responseFormat": "json_object",
+          "temperature": 0,
+          "timeout": 15000,
+          "maxRetries": 0
+        }
+      },
+      "id": "2a9559a6-8eda-4510-93eb-7c4d0a578d9c",
+      "name": "Output Fixer Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1424,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const DEFAULT_RUNTIME_REVISION = 'helio-support-runtime-module-unpublished';\n\nfunction createSupportRuntime(dependencies) {\n  assertDependencies(dependencies);\n\n  return {\n    async handleTurn(input) {\n      assertTurnEnvelope(input);\n\n      let duplicate;\n      try {\n        duplicate = await dependencies.turns.findByDeliveryId(input.deliveryId);\n      } catch {\n        return unavailableReceipt(\n          input,\n          dependencies.runtimeRevision,\n          'turn_ledger_unavailable',\n        );\n      }\n      if (duplicate) {\n        return { ...duplicate, status: 'duplicate' };\n      }\n\n      let policy;\n      let ticketState;\n      try {\n        [policy, ticketState] = await Promise.all([\n          dependencies.policySnapshots.getPublished(input.agentBotId),\n          dependencies.ticketStates.load({\n            agentBotId: input.agentBotId,\n            conversationId: input.conversationId,\n          }),\n        ]);\n      } catch {\n        return unavailableReceipt(\n          input,\n          dependencies.runtimeRevision,\n          'runtime_context_unavailable',\n        );\n      }\n      if (ticketState.phase === 'human_owned') {\n        const commitResult = await commitTurn(dependencies.turns, {\n          deliveryId: input.deliveryId,\n          agentBotId: input.agentBotId,\n          conversationId: input.conversationId,\n          expectedStateVersion: ticketState.version,\n          outcome: 'ignored',\n          nextState: ticketState,\n          effects: [],\n          runtimeRevision:\n            dependencies.runtimeRevision || DEFAULT_RUNTIME_REVISION,\n          policyVersion: policy.configVersion,\n        });\n        if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;\n        if (commitResult.unavailable) {\n          return unavailableReceipt(\n            input,\n            dependencies.runtimeRevision,\n            'turn_commit_unavailable',\n          );\n        }\n        const committed = commitResult.committed;\n        return {\n          deliveryId: input.deliveryId,\n          outcome: 'ignored',\n          status: 'completed',\n          runtimeRevision:\n            dependencies.runtimeRevision || DEFAULT_RUNTIME_REVISION,\n          policyVersion: policy.configVersion,\n          stateVersion: committed.stateVersion,\n          effectIds: committed.effectIds,\n          effects: [],\n        };\n      }\n      const playerEvent = input.events.find((event) => event.type === 'player_message');\n      const formEvent = input.events.find((event) => event.type === 'form_submitted');\n      let decision;\n      let status = 'completed';\n      let failureCode;\n      try {\n        if (formEvent) {\n          decision = authorizeFormSubmission(formEvent, policy, ticketState);\n        } else {\n          const faqEvidence = playerEvent\n            ? await dependencies.knowledge.search({\n                agentBotId: input.agentBotId,\n                query: playerEvent.text,\n              })\n            : [];\n          const proposal = await dependencies.model.propose({\n            events: input.events,\n            policy,\n            ticketState,\n            faqEvidence,\n          });\n          assertCompleteProposal(proposal);\n          decision = authorizeProposal(\n            proposal,\n            faqEvidence,\n            policy,\n            ticketState,\n            playerEvent,\n          );\n        }\n      } catch (error) {\n        status = 'failed_closed';\n        failureCode =\n          error?.code === 'invalid_runtime_proposal'\n            ? 'invalid_runtime_proposal'\n            : 'runtime_dependency_unavailable';\n        decision = {\n          outcome: 'handoff',\n          failedClosed: true,\n        };\n      }\n      const effects = buildEffects(input.deliveryId, decision);\n      const nextState = transitionTicketState(ticketState, decision);\n      const commitResult = await commitTurn(dependencies.turns, {\n        deliveryId: input.deliveryId,\n        agentBotId: input.agentBotId,\n        conversationId: input.conversationId,\n        expectedStateVersion: ticketState.version,\n        outcome: decision.outcome,\n        nextState,\n        effects,\n        runtimeRevision:\n          dependencies.runtimeRevision || DEFAULT_RUNTIME_REVISION,\n        policyVersion: policy.configVersion,\n        ...(failureCode ? { failureCode } : {}),\n      });\n      if (commitResult.duplicateReceipt) return commitResult.duplicateReceipt;\n      if (commitResult.unavailable) {\n        return unavailableReceipt(\n          input,\n          dependencies.runtimeRevision,\n          'turn_commit_unavailable',\n        );\n      }\n      const committed = commitResult.committed;\n\n      return {\n        deliveryId: input.deliveryId,\n        outcome: decision.outcome,\n        status,\n        runtimeRevision:\n          dependencies.runtimeRevision || DEFAULT_RUNTIME_REVISION,\n        policyVersion: policy.configVersion,\n        stateVersion: committed.stateVersion,\n        effectIds: committed.effectIds,\n        effects,\n        ...(failureCode ? { failureCode } : {}),\n        ...(decision.evidenceIds\n          ? { evidenceIds: decision.evidenceIds }\n          : {}),\n      };\n    },\n  };\n}\n\nconst PROPOSAL_FIELDS = [\n  'action',\n  'reply',\n  'category',\n  'summary',\n  'rewardSource',\n  'collectedFields',\n  'handoffOverrideReason',\n  'faqEvidenceIds',\n  'groundingQuotes',\n];\n\nfunction assertCompleteProposal(proposal) {\n  if (!isPlainObject(proposal)) {\n    throw invalidRuntimeProposal('Runtime proposal must be an object');\n  }\n\n  const proposalKeys = Object.keys(proposal);\n  const missingFields = PROPOSAL_FIELDS.filter(\n    (field) => !Object.hasOwn(proposal, field),\n  );\n  const unknownFields = proposalKeys.filter(\n    (field) => !PROPOSAL_FIELDS.includes(field),\n  );\n  if (missingFields.length > 0 || unknownFields.length > 0) {\n    throw invalidRuntimeProposal(\n      `Runtime proposal shape is invalid (missing: ${missingFields.join(', ') || 'none'}; unknown: ${unknownFields.join(', ') || 'none'})`,\n    );\n  }\n\n  for (const field of [\n    'action',\n    'reply',\n    'category',\n    'summary',\n    'rewardSource',\n    'handoffOverrideReason',\n  ]) {\n    if (typeof proposal[field] !== 'string') {\n      throw invalidRuntimeProposal(`Runtime proposal ${field} must be a string`);\n    }\n  }\n\n  if (\n    !isPlainObject(proposal.collectedFields) ||\n    Object.values(proposal.collectedFields).some(\n      (value) => typeof value !== 'string',\n    )\n  ) {\n    throw invalidRuntimeProposal(\n      'Runtime proposal collectedFields must contain only string values',\n    );\n  }\n\n  if (\n    !Array.isArray(proposal.faqEvidenceIds) ||\n    proposal.faqEvidenceIds.some((value) => typeof value !== 'string')\n  ) {\n    throw invalidRuntimeProposal(\n      'Runtime proposal faqEvidenceIds must contain only strings',\n    );\n  }\n\n  if (\n    !Array.isArray(proposal.groundingQuotes) ||\n    proposal.groundingQuotes.some(\n      (grounding) =>\n        !isPlainObject(grounding) ||\n        Object.keys(grounding).length !== 2 ||\n        !Object.hasOwn(grounding, 'evidenceId') ||\n        !Object.hasOwn(grounding, 'quote') ||\n        typeof grounding.evidenceId !== 'string' ||\n        typeof grounding.quote !== 'string',\n    )\n  ) {\n    throw invalidRuntimeProposal(\n      'Runtime proposal groundingQuotes must contain evidenceId and quote strings',\n    );\n  }\n}\n\nfunction isPlainObject(value) {\n  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;\n  const prototype = Object.getPrototypeOf(value);\n  return prototype === Object.prototype || prototype === null;\n}\n\nfunction unavailableReceipt(input, runtimeRevision, failureCode) {\n  return {\n    deliveryId: input.deliveryId,\n    outcome: 'handoff',\n    status: 'failed_closed',\n    runtimeRevision: runtimeRevision || DEFAULT_RUNTIME_REVISION,\n    policyVersion: null,\n    stateVersion: null,\n    effectIds: [],\n    effects: [],\n    failureCode,\n    retryable: true,\n  };\n}\n\nasync function commitTurn(turns, turn) {\n  try {\n    return { committed: await turns.commit(turn) };\n  } catch (error) {\n    if (error?.code !== 'duplicate_delivery') {\n      return { unavailable: true };\n    }\n    let receipt;\n    try {\n      receipt = await turns.findByDeliveryId(turn.deliveryId);\n    } catch {\n      return { unavailable: true };\n    }\n    if (!receipt) return { unavailable: true };\n    return { duplicateReceipt: { ...receipt, status: 'duplicate' } };\n  }\n}\n\nfunction authorizeProposal(\n  proposal,\n  faqEvidence,\n  policy,\n  ticketState,\n  playerEvent,\n) {\n  if (proposal.action === 'reply') {\n    return { outcome: 'reply', reply: requiredReply(proposal) };\n  }\n\n  if (proposal.action === 'clarify') {\n    const reply = requiredReply(proposal);\n    return { outcome: 'clarify', reply };\n  }\n\n  if (proposal.action === 'self_serve') {\n    const reply = requiredReply(proposal);\n    const availableEvidence = new Map(\n      faqEvidence.map((item) => [String(item.id), item]),\n    );\n    const evidenceIds = Array.isArray(proposal.faqEvidenceIds)\n      ? proposal.faqEvidenceIds.map(String)\n      : [];\n    if (\n      evidenceIds.length === 0 ||\n      evidenceIds.some((evidenceId) => !availableEvidence.has(evidenceId))\n    ) {\n      throw invalidRuntimeProposal(\n        'Self-service proposal requires current-turn FAQ evidence',\n      );\n    }\n    const groundingQuotes = Array.isArray(proposal.groundingQuotes)\n      ? proposal.groundingQuotes\n      : [];\n    if (\n      groundingQuotes.length === 0 ||\n      groundingQuotes.some((grounding) => {\n        const evidenceId = String(grounding?.evidenceId || '');\n        const quote = String(grounding?.quote || '').trim();\n        const evidence = availableEvidence.get(evidenceId);\n        const evidenceText = String(\n          evidence?.content || evidence?.text || evidence?.answer || '',\n        );\n        return (\n          !evidenceIds.includes(evidenceId) ||\n          !quote ||\n          !includesNormalized(evidenceText, quote) ||\n          !includesNormalized(reply, quote)\n        );\n      })\n    ) {\n      throw invalidRuntimeProposal(\n        'Self-service reply is not grounded in cited FAQ text',\n      );\n    }\n    const replySentences = reply\n      .split(/(?<=[.!?])\\s+/)\n      .map((sentence) => sentence.trim())\n      .filter(Boolean);\n    if (\n      replySentences.some(\n        (sentence) =>\n          !groundingQuotes.some((grounding) =>\n            includesNormalized(sentence, grounding.quote),\n          ),\n      )\n    ) {\n      throw invalidRuntimeProposal(\n        'Every self-service sentence requires cited FAQ text',\n      );\n    }\n    return { outcome: 'self_serve', reply, evidenceIds, groundingQuotes };\n  }\n\n  if (proposal.action === 'escalate') {\n    if (ticketState.selfServeAttempted !== true) {\n      throw invalidRuntimeProposal(\n        'Escalation requires a prior self-service attempt',\n      );\n    }\n    const escalation = resolveEscalationDecision({\n      policy,\n      category: proposal.category,\n      rewardSource: proposal.rewardSource || proposal.reward_source,\n      knownValueSources: [ticketState.knownValues, proposal.collectedFields],\n    });\n    return {\n      ...escalation,\n      summary: String(proposal.summary || '').trim(),\n    };\n  }\n\n  if (proposal.action === 'handoff') {\n    const escalation = resolveEscalationDecision({\n      policy,\n      category: proposal.category,\n      rewardSource: proposal.rewardSource || proposal.reward_source,\n      knownValueSources: [ticketState.knownValues, proposal.collectedFields],\n    });\n    const overrideReason = String(\n      proposal.handoffOverrideReason || proposal.handoff_override_reason || '',\n    ).trim();\n    const allowedOverrides = new Set([\n      'critical',\n      'explicit_human_request',\n      'post_form_followup',\n    ]);\n    if (overrideReason && !allowedOverrides.has(overrideReason)) {\n      throw invalidRuntimeProposal(\n        `Unsupported handoff override: ${overrideReason}`,\n      );\n    }\n    if (\n      overrideReason &&\n      !handoffOverrideIsSupported(overrideReason, playerEvent, ticketState)\n    ) {\n      throw invalidRuntimeProposal(\n        `Handoff override is not supported by turn context: ${overrideReason}`,\n      );\n    }\n    if (!overrideReason && ticketState.selfServeAttempted !== true) {\n      throw invalidRuntimeProposal(\n        'Direct handoff requires prior self-service or a verified override',\n      );\n    }\n    if (escalation.outcome !== 'handoff' && !overrideReason) {\n      throw invalidRuntimeProposal(\n        'Direct handoff requires complete fields or an allowed override',\n      );\n    }\n    return {\n      ...escalation,\n      outcome: 'handoff',\n      summary: String(proposal.summary || '').trim(),\n      ...(overrideReason ? { overrideReason } : {}),\n    };\n  }\n\n  throw invalidRuntimeProposal(\n    `Unsupported runtime action: ${proposal?.action || 'missing'}`,\n  );\n}\n\nfunction handoffOverrideIsSupported(reason, playerEvent, ticketState) {\n  if (reason === 'critical') {\n    if (playerEvent?.critical === true || ticketState.critical === true) return true;\n    const text = String(playerEvent?.text || '');\n    return (\n      /\\b(?:account|profile)\\b.{0,32}\\b(?:hacked|compromised|stolen|taken\\s+over)\\b/i.test(text) ||\n      /\\b(?:hacked|compromised|stolen|taken\\s+over)\\b.{0,32}\\b(?:account|profile)\\b/i.test(text) ||\n      /\\b(?:unauthori[sz]ed|fraudulent)\\b.{0,28}\\b(?:charge|purchase|transaction)\\b/i.test(text) ||\n      /\\b(?:charge|purchase|transaction)\\b.{0,28}\\b(?:unauthori[sz]ed|fraudulent)\\b/i.test(text)\n    );\n  }\n  if (reason === 'post_form_followup') {\n    return ticketState.phase === 'request_form';\n  }\n  if (reason !== 'explicit_human_request') return false;\n  if (playerEvent?.requestsHuman === true) return true;\n  const text = String(playerEvent?.text || '');\n  return (\n    /\\b(?:let\\s+me\\s+|want\\s+to\\s+|need\\s+to\\s+)?(?:talk|speak|chat)\\s+(?:to|with)\\s+(?:a\\s+|an\\s+|the\\s+|real\\s+)?(?:human|person|support\\s+agent|representative|someone|team\\s+member)\\b/i.test(text) ||\n    /\\b(?:connect|transfer|hand(?:\\s|-)?off)\\s+me\\s+(?:to|with)\\s+(?:a\\s+|an\\s+|the\\s+|real\\s+)?(?:human|person|support\\s+agent|representative|someone|team)\\b/i.test(text) ||\n    /\\b(?:get\\s+me|give\\s+me|want|need)\\s+(?:a\\s+|an\\s+|the\\s+|real\\s+)?(?:human|person|support\\s+agent|representative)\\b/i.test(text) ||\n    /\\b(?:real\\s+person|human\\s+agent|support\\s+agent|representative)\\b.{0,16}\\b(?:please|now)\\b/i.test(text)\n  );\n}\n\nfunction transitionTicketState(ticketState, decision) {\n  const nextPhase =\n    decision.outcome === 'reply' || decision.outcome === 'ignored'\n      ? ticketState.phase\n      : decision.outcome;\n  return {\n    ...ticketState,\n    phase: nextPhase,\n    ...(decision.outcome === 'self_serve'\n      ? { selfServeAttempted: true }\n      : {}),\n    ...(decision.category ? { category: decision.category } : {}),\n    ...(decision.rewardSource ? { rewardSource: decision.rewardSource } : {}),\n    ...(decision.knownValues ? { knownValues: decision.knownValues } : {}),\n    ...(decision.summary ? { summary: decision.summary } : {}),\n  };\n}\n\nfunction buildEffects(deliveryId, decision) {\n  if (decision.failedClosed) {\n    return [\n      {\n        type: 'send_public_message',\n        idempotencyKey: `${deliveryId}:safe-fallback-reply`,\n        text: 'I could not safely complete that request, so I have sent it to the team.',\n        critical: false,\n      },\n      {\n        type: 'open_for_human',\n        idempotencyKey: `${deliveryId}:open-for-human`,\n        critical: true,\n      },\n    ];\n  }\n\n  if (decision.outcome === 'request_form') {\n    return [\n      {\n        type: 'send_form',\n        idempotencyKey: `${deliveryId}:escalation-form`,\n        category: decision.category,\n        title: decision.form.title,\n        fields: decision.form.fields,\n        knownValues: decision.knownValues,\n        attachmentConfig: decision.form.attachmentConfig,\n        critical: true,\n      },\n    ];\n  }\n\n  if (decision.outcome === 'handoff') {\n    return [\n      {\n        type: 'send_private_note',\n        idempotencyKey: `${deliveryId}:handoff-note`,\n        category: decision.category,\n        summary: decision.summary,\n        collectedValues: decision.knownValues,\n        critical: false,\n      },\n      {\n        type: 'set_label',\n        idempotencyKey: `${deliveryId}:category-label`,\n        label: decision.category,\n        critical: false,\n      },\n      {\n        type: 'send_public_message',\n        idempotencyKey: `${deliveryId}:handoff-reply`,\n        text: 'Thanks — I have sent this to the team.',\n        critical: false,\n      },\n      {\n        type: 'open_for_human',\n        idempotencyKey: `${deliveryId}:open-for-human`,\n        critical: true,\n      },\n    ];\n  }\n\n  return [\n    {\n      type: 'send_public_message',\n      idempotencyKey: `${deliveryId}:public-reply`,\n      text: decision.reply,\n      critical: true,\n    },\n  ];\n}\n\nfunction authorizeFormSubmission(event, policy, ticketState) {\n  const category = String(ticketState.category || '').trim();\n  if (ticketState.phase !== 'request_form' || !category) {\n    throw invalidRuntimeProposal(\n      'Form submission requires pending escalation requirements',\n    );\n  }\n  return {\n    ...resolveEscalationDecision({\n      policy,\n      category,\n      rewardSource: ticketState.rewardSource,\n      knownValueSources: [ticketState.knownValues, event.values],\n    }),\n    summary: String(ticketState.summary || '').trim(),\n  };\n}\n\nfunction resolveEscalationDecision({\n  policy,\n  category: categoryInput,\n  rewardSource: rewardSourceInput,\n  knownValueSources,\n}) {\n  const category = String(categoryInput || '').trim();\n  const configuredCategories = taxonomyValues(policy.taxonomy?.categories);\n  if (!configuredCategories.has(category)) {\n    throw invalidRuntimeProposal(\n      `Escalation category is not configured: ${category || 'missing'}`,\n    );\n  }\n\n  const rewardSource = category === 'reward'\n    ? String(rewardSourceInput || '').trim()\n    : '';\n  const configuredRewardSources = taxonomyValues(\n    policy.taxonomy?.rewardSources || policy.taxonomy?.reward_sources,\n  );\n  if (\n    category === 'reward' &&\n    configuredRewardSources.size > 0 &&\n    !configuredRewardSources.has(rewardSource)\n  ) {\n    throw invalidRuntimeProposal(\n      `Reward source is not configured: ${rewardSource || 'missing'}`,\n    );\n  }\n\n  const requirements = policy.escalationRequirements || {};\n  const requirement = requirements[rewardSource] || requirements[category];\n  const fields = Array.isArray(requirement?.items)\n    ? requirement.items\n    : Array.isArray(requirement?.fields)\n      ? requirement.fields\n      : [];\n  if (fields.length === 0) {\n    throw invalidRuntimeProposal(\n      `Escalation requirements are missing for category: ${category}`,\n    );\n  }\n  const allowedFieldNames = new Set(fields.map((field) => field.name).filter(Boolean));\n  const requiredFieldNames = new Set(\n    Array.isArray(requirement.required_fields)\n      ? requirement.required_fields\n      : fields\n          .filter((field) => field.required !== false)\n          .map((field) => field.name),\n  );\n  const knownValues = normalizeKnownValues(...knownValueSources);\n  const configuredKnownValues = Object.fromEntries(\n    Object.entries(knownValues).filter(([name]) => allowedFieldNames.has(name)),\n  );\n  const missingFields = fields.filter(\n    (field) =>\n      requiredFieldNames.has(field.name) &&\n      !hasKnownValue(configuredKnownValues[field.name]),\n  );\n\n  return {\n    outcome: missingFields.length > 0 ? 'request_form' : 'handoff',\n    category,\n    ...(rewardSource ? { rewardSource } : {}),\n    knownValues: configuredKnownValues,\n    form: {\n      title: requirement.title || 'Support details',\n      fields: missingFields,\n      attachmentConfig:\n        requirement.attachment_config || requirement.attachmentConfig || null,\n    },\n  };\n}\n\nfunction taxonomyValues(items) {\n  return new Set(\n    (Array.isArray(items) ? items : [])\n      .map((item) =>\n        typeof item === 'string'\n          ? item\n          : item?.id || item?.value || item?.slug,\n      )\n      .filter(Boolean)\n      .map(String),\n  );\n}\n\nfunction requiredReply(proposal) {\n  const reply = String(proposal.reply || '').trim();\n  if (!reply) {\n    throw invalidRuntimeProposal('Runtime proposal requires a non-empty reply');\n  }\n  return reply;\n}\n\nfunction normalizeKnownValues(...sources) {\n  const knownValues = {};\n  for (const source of sources) {\n    if (!source || typeof source !== 'object' || Array.isArray(source)) continue;\n    for (const [name, value] of Object.entries(source)) {\n      if (hasKnownValue(value)) knownValues[name] = value;\n    }\n  }\n  return knownValues;\n}\n\nfunction hasKnownValue(value) {\n  return value !== null && value !== undefined && String(value).trim() !== '';\n}\n\nfunction includesNormalized(text, expected) {\n  const normalize = (value) =>\n    String(value || '')\n      .toLowerCase()\n      .replace(/\\s+/g, ' ')\n      .trim();\n  return normalize(text).includes(normalize(expected));\n}\n\nfunction invalidRuntimeProposal(message) {\n  const error = new Error(message);\n  error.code = 'invalid_runtime_proposal';\n  return error;\n}\n\nfunction assertDependencies(dependencies) {\n  const required = [\n    ['policySnapshots', 'getPublished'],\n    ['ticketStates', 'load'],\n    ['knowledge', 'search'],\n    ['model', 'propose'],\n    ['turns', 'findByDeliveryId'],\n    ['turns', 'commit'],\n  ];\n\n  for (const [port, method] of required) {\n    if (typeof dependencies?.[port]?.[method] !== 'function') {\n      throw new TypeError(`Support runtime requires ${port}.${method}()`);\n    }\n  }\n}\n\nfunction assertTurnEnvelope(input) {\n  if (!input || typeof input !== 'object') {\n    throw new TypeError('Turn envelope is required');\n  }\n  if (!String(input.deliveryId || '').trim()) {\n    throw new TypeError('Turn envelope requires deliveryId');\n  }\n  if (!Number.isInteger(input.agentBotId) || input.agentBotId <= 0) {\n    throw new TypeError('Turn envelope requires a positive agentBotId');\n  }\n  if (!Number.isInteger(input.conversationId) || input.conversationId <= 0) {\n    throw new TypeError('Turn envelope requires a positive conversationId');\n  }\n  if (!Array.isArray(input.events) || input.events.length === 0) {\n    throw new TypeError('Turn envelope requires at least one event');\n  }\n}\n\n\nfunction n8nParseMaybeJson(value) {\n  if (typeof value !== 'string') return value;\n  const trimmed = value.trim();\n  if (!trimmed) return null;\n  try {\n    return JSON.parse(trimmed);\n  } catch {\n    return value;\n  }\n}\n\nfunction n8nObject(value) {\n  const parsed = n8nParseMaybeJson(value);\n  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)\n    ? parsed\n    : {};\n}\n\nfunction normalizeN8nFaqEvidence(intermediateSteps) {\n  const evidence = [];\n  const seenObjects = new Set();\n\n  function visit(value) {\n    const parsed = n8nParseMaybeJson(value);\n    if (Array.isArray(parsed)) {\n      for (const item of parsed) visit(item);\n      return;\n    }\n    if (!parsed || typeof parsed !== 'object') return;\n    if (seenObjects.has(parsed)) return;\n    seenObjects.add(parsed);\n\n    const document = n8nObject(parsed.document);\n    const source = Object.keys(document).length > 0 ? document : parsed;\n    const metadata = n8nObject(source.metadata || parsed.metadata);\n    const id = String(\n      metadata.doc_id ||\n        metadata.docId ||\n        metadata.id ||\n        metadata.faq_id ||\n        metadata.faqId ||\n        metadata.articleId ||\n        source.id ||\n        parsed.id ||\n        '',\n    ).trim();\n    const content = String(\n      source.pageContent ||\n        source.content ||\n        source.text ||\n        source.answer ||\n        parsed.pageContent ||\n        parsed.content ||\n        parsed.text ||\n        '',\n    ).trim();\n    if (id && content) {\n      evidence.push({\n        id,\n        content,\n        title: String(metadata.title || source.title || '').trim(),\n        score: Number(parsed.score ?? source.score ?? metadata.score ?? 0),\n        metadata,\n      });\n    }\n\n    for (const key of ['documents', 'results', 'data', 'output', 'value']) {\n      if (parsed[key] !== undefined && parsed[key] !== parsed) visit(parsed[key]);\n    }\n  }\n\n  for (const step of Array.isArray(intermediateSteps) ? intermediateSteps : []) {\n    const toolName = String(step?.action?.tool || step?.tool || '')\n      .toLowerCase()\n      .replace(/[^a-z0-9]+/g, '_');\n    if (!toolName.includes('search') || !toolName.includes('faq')) continue;\n    visit(step?.observation ?? step?.output ?? step?.result);\n  }\n\n  return [...new Map(evidence.map((item) => [item.id, item])).values()];\n}\n\nfunction normalizeN8nTicketState(ticketState) {\n  const raw = n8nObject(ticketState);\n  const supportState = n8nObject(raw.supportState || raw.support_state);\n  let phase = String(raw.phase || supportState.phase || 'idle').trim() || 'idle';\n  const botStatus = String(raw.botStatus || raw.bot_status || '').trim();\n  if (phase === 'route') phase = 'request_form';\n  if (phase === 'human_owned' || botStatus === 'human_owned') phase = 'human_owned';\n  const knownValues = n8nObject(\n    supportState.knownValues ||\n      supportState.known_values ||\n      supportState.knownFields ||\n      supportState.known_fields,\n  );\n  const version = raw.found === false\n    ? 0\n    : Number(\n        raw.supportStateVersion ??\n          raw.support_state_version ??\n          supportState.version ??\n          0,\n      );\n  return {\n    version: Number.isFinite(version) ? version : 0,\n    phase,\n    knownValues,\n    selfServeAttempted: Boolean(\n      supportState.selfServeAttempted ??\n        supportState.self_serve_attempted ??\n        ['self_serve', 'request_form'].includes(phase),\n    ),\n    category: String(\n      supportState.category || raw.caseType || raw.case_type || '',\n    ).trim(),\n    rewardSource: String(\n      supportState.rewardSource || supportState.reward_source || '',\n    ).trim(),\n    summary: String(supportState.summary || '').trim(),\n  };\n}\n\nfunction normalizeN8nProposal(agentItem) {\n  const item = n8nObject(agentItem);\n  const output = n8nObject(item.output || item);\n  return {\n    action: String(output.action || '').trim(),\n    reply: String(output.reply || '').trim(),\n    category: String(output.category || '').trim(),\n    summary: String(output.summary || '').trim(),\n    rewardSource: String(output.rewardSource || output.reward_source || '').trim(),\n    collectedFields: n8nObject(\n      output.collectedFields || output.collected_fields,\n    ),\n    handoffOverrideReason: String(\n      output.handoffOverrideReason || output.handoff_override_reason || '',\n    ).trim(),\n    faqEvidenceIds: (\n      Array.isArray(output.faqEvidenceIds)\n        ? output.faqEvidenceIds\n        : output.faq_evidence_ids\n    ) || [],\n    groundingQuotes: (\n      Array.isArray(output.groundingQuotes)\n        ? output.groundingQuotes\n        : output.grounding_quotes\n    || []).map((grounding) => ({\n      evidenceId: String(\n        grounding?.evidenceId || grounding?.evidence_id || '',\n      ).trim(),\n      quote: String(grounding?.quote || '').trim(),\n    })),\n  };\n}\n\nfunction legacyOutputFromRuntimeReceipt(receipt, proposal, nextState) {\n  const effects = Array.isArray(receipt?.effects) ? receipt.effects : [];\n  const publicMessage = effects.find((effect) => effect.type === 'send_public_message');\n  const form = effects.find((effect) => effect.type === 'send_form');\n  const note = effects.find((effect) => effect.type === 'send_private_note');\n  const action = receipt.outcome === 'request_form'\n    ? 'escalate'\n    : receipt.outcome === 'handoff'\n      ? 'handoff'\n      : receipt.outcome === 'ignored'\n        ? 'ignored'\n        : 'reply';\n  return {\n    action,\n    reply: String(publicMessage?.text || proposal.reply || '').trim(),\n    category: String(\n      form?.category || note?.category || nextState?.category || proposal.category || 'other',\n    ).trim(),\n    summary: String(note?.summary || nextState?.summary || proposal.summary || '').trim(),\n    reward_source: String(\n      nextState?.rewardSource || proposal.rewardSource || '',\n    ).trim(),\n    collected_fields: n8nObject(\n      form?.knownValues || note?.collectedValues || nextState?.knownValues || proposal.collectedFields,\n    ),\n    handoff_override_reason: String(proposal.handoffOverrideReason || '').trim(),\n    qa_status: receipt.status === 'completed' ? 'authorized' : receipt.status,\n    qa_issues: receipt.failureCode ? [receipt.failureCode] : [],\n    qa_faq_ids: Array.isArray(receipt.evidenceIds) ? receipt.evidenceIds : [],\n    runtime_outcome: receipt.outcome,\n  };\n}\n\nfunction n8nHandoffNote(effect) {\n  const lines = [\n    `Bot escalation - ${String(effect.category || 'other')}`,\n    String(effect.summary || 'Player requested human assistance.').trim(),\n  ];\n  const values = n8nObject(effect.collectedValues);\n  const entries = Object.entries(values);\n  if (entries.length > 0) {\n    lines.push('', 'Collected details:');\n    for (const [name, value] of entries) {\n      lines.push(`${name}: ${String(value)}`);\n    }\n  }\n  return lines.join('\\n');\n}\n\nfunction n8nEffectRequest(effect, accept) {\n  const runtime = n8nObject(accept.helioRuntime);\n  const accountId = Number(accept.accountId || runtime.accountId);\n  const conversationId = Number(accept.conversationId);\n  const baseUrl = String(runtime.helioBaseUrl || '').replace(/\\/$/, '');\n  const conversationUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}`;\n  const headers = {\n    api_access_token: String(runtime.accessToken || ''),\n    'Idempotency-Key': String(effect.idempotencyKey || ''),\n  };\n  const messageAttributes = {\n    n8n_idempotency_key: String(effect.idempotencyKey || ''),\n  };\n\n  if (effect.type === 'send_public_message' || effect.type === 'send_player_notification') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/messages`,\n      headers,\n      body: {\n        content: String(effect.text || ''),\n        message_type: 'outgoing',\n        content_type: 'text',\n        private: false,\n        content_attributes: messageAttributes,\n      },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  if (effect.type === 'send_private_note') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/messages`,\n      headers,\n      body: {\n        content: n8nHandoffNote(effect),\n        message_type: 'outgoing',\n        content_type: 'text',\n        private: true,\n        content_attributes: messageAttributes,\n      },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  if (effect.type === 'send_form') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/messages`,\n      headers,\n      body: {\n        content: String(effect.text || 'Please provide the remaining details below.'),\n        message_type: 'outgoing',\n        content_type: 'form',\n        private: false,\n        content_attributes: {\n          ...messageAttributes,\n          items: Array.isArray(effect.fields) ? effect.fields : [],\n          attachment_config: effect.attachmentConfig || null,\n          known_values: n8nObject(effect.knownValues),\n          category: String(effect.category || ''),\n        },\n      },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  if (effect.type === 'set_label') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/labels`,\n      headers,\n      body: { labels: [String(effect.label || '')].filter(Boolean) },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  if (effect.type === 'set_typing') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/toggle_typing_status`,\n      headers,\n      body: {\n        typing_status: effect.active === true ? 'on' : 'off',\n        is_private: effect.private === true,\n      },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  if (effect.type === 'open_for_human') {\n    return {\n      method: 'POST',\n      url: `${conversationUrl}/toggle_status`,\n      headers,\n      body: { status: 'open' },\n      json: true,\n      timeout: 12000,\n    };\n  }\n\n  throw new Error(`Unsupported runtime effect type: ${String(effect.type || 'missing')}`);\n}\n\nasync function executeN8nRuntimeEffects({\n  receipt,\n  accept,\n  persistenceRequest,\n  httpRequest,\n}) {\n  const effects = Array.isArray(receipt?.effects) ? receipt.effects : [];\n  const orderedEffects = effects\n    .map((effect, index) => ({ effect, index }))\n    .sort((left, right) =>\n      Number(right.effect?.critical === true) - Number(left.effect?.critical === true) ||\n      left.index - right.index,\n    )\n    .map(({ effect }) => effect);\n  const completedEffectIds = [];\n  const skippedEffectIds = [];\n  const failedEffectIds = [];\n  const criticalFailures = [];\n  const owner = [\n    accept?.helioRuntime?.runtimeRevision || receipt?.runtimeRevision || 'runtime',\n    receipt?.deliveryId || 'turn',\n  ].join(':');\n\n  for (const effect of orderedEffects) {\n    const effectId = String(effect?.idempotencyKey || '');\n    try {\n      const claim = await persistenceRequest('/runtime/effects/claim', {\n        accountId: Number(accept?.accountId || accept?.helioRuntime?.accountId),\n        agentBotId: Number(accept?.helioRuntime?.agentBotId),\n        conversationId: Number(accept?.conversationId),\n        deliveryId: String(receipt?.deliveryId || ''),\n        owner,\n        effect,\n      });\n      if (claim?.shouldRun !== true) {\n        skippedEffectIds.push(effectId);\n        continue;\n      }\n      const response = await httpRequest(n8nEffectRequest(effect, accept));\n      await persistenceRequest('/runtime/effects/complete', {\n        agentBotId: Number(accept?.helioRuntime?.agentBotId),\n        effectId,\n        response,\n        remoteId: response?.id != null ? String(response.id) : null,\n      });\n      completedEffectIds.push(effectId);\n    } catch (error) {\n      failedEffectIds.push(effectId);\n      await persistenceRequest('/runtime/effects/fail', {\n        agentBotId: Number(accept?.helioRuntime?.agentBotId),\n        effectId,\n        failureCode: 'effect_execution_failed',\n      }).catch(() => {});\n      if (effect?.critical === true) criticalFailures.push(effectId);\n    }\n  }\n\n  const execution = {\n    completedEffectIds,\n    skippedEffectIds,\n    failedEffectIds,\n  };\n  if (criticalFailures.length > 0) {\n    const error = new Error(\n      `Critical runtime effects failed: ${criticalFailures.join(', ')}`,\n    );\n    error.code = 'critical_effect_failed';\n    error.execution = execution;\n    throw error;\n  }\n  return execution;\n}\n\nfunction n8nSubmittedValues(value) {\n  if (!value) return {};\n  if (!Array.isArray(value)) return n8nObject(value);\n  return Object.fromEntries(\n    value\n      .map((entry) => {\n        if (!entry || typeof entry !== 'object') return null;\n        const name = String(entry.name || entry.id || entry.key || '').trim();\n        const answer = entry.value ?? entry.answer ?? entry.text;\n        return name && answer !== undefined ? [name, answer] : null;\n      })\n      .filter(Boolean),\n  );\n}\n\nfunction n8nPublishedPolicy(loadConfig) {\n  const loaded = n8nObject(loadConfig);\n  const botConfig = n8nObject(loaded.botRuntimeConfig);\n  return {\n    ...botConfig,\n    configVersion: Number(loaded.botConfigVersion || botConfig.configVersion || 0),\n    taxonomy: n8nObject(botConfig.taxonomy),\n    escalationRequirements: n8nObject(\n      botConfig.escalationRequirements || botConfig.escalation_requirements,\n    ),\n  };\n}\n\nconst accept = $('Accept Runtime Payload').first().json || {};\nconst loadConfig = $('Load Bot Config').first().json || {};\nconst mergedState = $('Merge Ticket State').first().json || {};\nlet agentItem = {};\ntry { agentItem = $('Support Agent').first().json || {}; }\ncatch { agentItem = $input.first().json || {}; }\nconst proposal = normalizeN8nProposal(agentItem);\nconst faqEvidence = normalizeN8nFaqEvidence(agentItem.intermediateSteps);\nconst ticketState = normalizeN8nTicketState(mergedState.ticketState);\nconst policy = n8nPublishedPolicy(loadConfig);\nconst configuredPersistenceUrl = String(\n  $env.BOT_FACTORY_INTERNAL_URL || 'http://bot-factory:3020',\n);\nconst persistenceBaseUrl = configuredPersistenceUrl.endsWith('/')\n  ? configuredPersistenceUrl.slice(0, -1)\n  : configuredPersistenceUrl;\nconst persistenceSecret = String($env.BOT_FACTORY_API_SECRET || '').trim();\nif (!persistenceSecret) {\n  throw new Error('BOT_FACTORY_API_SECRET is required for durable runtime persistence');\n}\nconst persistenceRequest = async (path, body) => this.helpers.httpRequest({\n  method: 'POST',\n  url: persistenceBaseUrl + path,\n  headers: { 'x-helio-bot-factory-secret': persistenceSecret },\n  body,\n  json: true,\n  timeout: 12000,\n});\nlet committedTurn = null;\n\nconst runtime = createSupportRuntime({\n  runtimeRevision: String(loadConfig.runtimeRevision || accept.helioRuntime?.runtimeRevision || ''),\n  policySnapshots: { async getPublished() { return policy; } },\n  ticketStates: { async load() { return ticketState; } },\n  knowledge: { async search() { return faqEvidence; } },\n  model: { async propose() { return proposal; } },\n      turns: {\n        async findByDeliveryId(deliveryId) {\n      const result = await persistenceRequest('/runtime/turns/find', {\n        accountId: Number(accept.accountId || accept.helioRuntime?.accountId),\n        agentBotId: Number(accept.helioRuntime?.agentBotId),\n        conversationId: Number(accept.conversationId),\n        deliveryId: String(deliveryId),\n      });\n      return result?.receipt || null;\n    },\n    async commit(turn) {\n      const result = await persistenceRequest('/runtime/turns/commit', {\n        accountId: Number(accept.accountId || accept.helioRuntime?.accountId),\n        turn,\n      });\n      if (result?.duplicate === true) {\n        const error = new Error('Duplicate runtime delivery');\n        error.code = 'duplicate_delivery';\n        throw error;\n      }\n      committedTurn = turn;\n      return {\n        stateVersion: Number(result?.receipt?.stateVersion),\n        effectIds: Array.isArray(result?.receipt?.effectIds)\n          ? result.receipt.effectIds\n          : [],\n      };\n    },\n  },\n});\n\nconst conversationId = Number(accept.conversationId);\nconst deliveryId = String(\n  accept.batchId || accept.deliveryId || accept.messageId ||\n  [accept.helioRuntime?.agentBotId, conversationId].join(':'),\n);\nconst submittedValues = n8nSubmittedValues(accept.submittedValues);\nconst formSubmitted = accept.route === 'form_submitted' || Object.keys(submittedValues).length > 0;\nconst events = formSubmitted\n  ? [{ type: 'form_submitted', messageId: String(accept.messageId || ''), values: submittedValues }]\n  : [{\n      type: 'player_message',\n      messageId: String(accept.messageId || ''),\n      text: String(accept.content || ''),\n      attachments: Array.isArray(accept.attachmentRefs) ? accept.attachmentRefs : [],\n    }];\nconst runtimeReceipt = await runtime.handleTurn({\n  deliveryId,\n  agentBotId: Number(accept.helioRuntime?.agentBotId),\n  conversationId,\n  events,\n});\nif (runtimeReceipt.retryable === true) {\n  const error = new Error(\n    'Retryable runtime failure: ' + String(runtimeReceipt.failureCode || 'unknown'),\n  );\n  error.code = 'retryable_runtime_failure';\n  throw error;\n}\nconst runtimeEffectExecution = await executeN8nRuntimeEffects({\n  receipt: runtimeReceipt,\n  accept,\n  persistenceRequest,\n  httpRequest: this.helpers.httpRequest.bind(this.helpers),\n});\nconst runtimeNextState = committedTurn?.nextState || ticketState;\nconst output = legacyOutputFromRuntimeReceipt(runtimeReceipt, proposal, runtimeNextState);\n\nreturn [{\n  json: {\n    ...agentItem,\n    output,\n    support_output: n8nObject(agentItem.output),\n    runtimeReceipt,\n    runtimeEffectExecution,\n    runtimeNextState,\n    runtimeEvidence: faqEvidence,\n  },\n}];"
+      },
+      "id": "32175db0-fe11-4ce2-95a0-b435f113f4a4",
+      "name": "Merge QA With Routing Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        192
+      ],
+      "notesInFlow": true,
+      "notes": "Authorization boundary: SupportRuntime validates current-turn FAQ evidence, escalation policy, ticket state, and handoff rules before legacy effect nodes execute."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Accept Runtime Payload').first().json.helioRuntime.memorySessionPrefix + String($json.accountId || $('Accept Runtime Payload').first().json.accountId || '') + ':' + String($json.conversationId || $('Accept Runtime Payload').first().json.conversationId || '') }}",
+        "tableName": "={{ $('Accept Runtime Payload').first().json.helioRuntime.memoryTableName }}",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        352
+      ],
+      "id": "e8c8ff7a-a86d-43b2-8b2d-f072e3cc068a",
+      "name": "Postgres Chat Memory"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Searches this game's official FAQ knowledge base for grounded support answers. Use before answering how-to or troubleshooting questions.",
+        "tableName": "={{ $('Accept Runtime Payload').first().json.helioRuntime.ragTableName }}",
+        "topK": 8,
+        "options": {
+          "distanceStrategy": "cosine",
+          "columnNames": {
+            "values": {}
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        992,
+        496
+      ],
+      "id": "4815d647-b55e-41ed-b2ee-459d5fe1d8ba",
+      "name": "Search FAQ Knowledge Base"
+    },
+    {
+      "id": "idem-finalize",
+      "name": "Finalize Batch",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4800,
+        384
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ \"SELECT bot_finalize_batch('\" + String($('Accept Runtime Payload').item.json.batchId).replace(/'/g, \"''\") + \"', '\" + String($('Accept Runtime Payload').item.json.executionOwner).replace(/'/g, \"''\") + \"', NULL);\" }}",
+        "options": {
+          "queryBatching": "single"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Bot Postgres"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item?.json || {};\nconst body = raw.body && typeof raw.body === 'object' ? raw.body : raw;\nconst claimed = body.claimedBatch && typeof body.claimedBatch === 'object' ? body.claimedBatch : {};\nconst agentBotId = Number(body.agentBotId);\nconst accessToken = String(body.accessToken || '').trim();\nconst ragTableName = String(body.ragTableName || '').trim();\nif (!Number.isInteger(agentBotId) || !accessToken || !ragTableName) {\n  throw new Error('agentBotId, accessToken, and ragTableName are required');\n}\nreturn {\n  json: {\n    ...claimed,\n    helioRuntime: {\n      agentBotId,\n      accountId: Number(body.accountId) || claimed.accountId || null,\n      inboxId: Number(body.inboxId) || claimed.inboxId || null,\n      gameId: String(body.gameId || ''),\n      accessToken,\n      webhookSecret: String(body.webhookSecret || ''),\n      helioBaseUrl: String(body.helioBaseUrl || ''),\n      configUrl: String(body.configUrl || ''),\n      ragTableName,\n      memoryTableName: String(body.memoryTableName || ''),\n      memorySessionPrefix: String(body.memorySessionPrefix || ''),\n      systemMessage: String(body.systemMessage || ''),\n      runtimeRevision: \"helio-support-runtime-v7\",\n    },\n  },\n};"
+      },
+      "id": "40886621c41621d6",
+      "name": "Accept Runtime Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item?.json || {};\nconst runtime = item.helioRuntime || {};\nconst staticData = $getWorkflowStaticData('global');\nconst cacheKey = 'helio_bot_config_' + String(runtime.agentBotId || 'unknown');\nconst now = Date.now();\nconst ttlMs = 30 * 1000;\nconst runtimeContract = \"You are a support assistant for this game. Follow this runtime contract on every turn. Game-specific persona and restrictions are supplied separately as game instructions.\\n\\n## How You Work\\nFor every player message: judge whether it's off-topic, a question, or a complaint/issue -> search for knowledge when needed -> answer, ask a focused question, offer a self-serve fix, or route to a human. Never invent facts. Never expose internal mechanics. You ARE support — never tell players to contact support elsewhere. Always move the conversation forward.\\n\\n## The Support Funnel\\nMost issues arrive vague. Walk them through these phases IN ORDER:\\n1. CLARIFY — pin down WHAT and WHERE. Search first, then ask focused questions grounded in the results.\\n2. SELF-SERVE — once WHAT and WHERE are known, offer one supported fix or check.\\n3. ROUTE — only after self-serve is exhausted or unavailable, route to a human.\\n\\nStay in a phase until its goal is met. Knowing WHAT and WHERE is NOT a reason to route.\\n\\n## Self-Serve Gate\\nYou may NOT route to a human until ONE of these is true:\\n(a) You offered at least one supported self-serve check for the clarified issue, and the player indicated they already tried it / it didn't help.\\n(b) You searched for the now-clarified issue THIS turn and the results contain no relevant fix.\\n(c) An override applies: the player explicitly asked for a human, the issue is critical, it's pure product feedback, or a form was already sent.\\n\\n## Tools\\n### Search FAQ Knowledge Base\\n- Your ONLY source of support knowledge. Never use outside knowledge.\\n- You MUST search before answering, troubleshooting, OR routing any support issue — including short clarification replies that narrow WHAT or WHERE.\\n- Skip search only for greetings, off-topic, instruction-tampering, and pure thanks/closings.\\n- Search at most ONCE per player message.\\n\\n### Get Escalation Requirements\\n- Call exactly ONCE, only after deciding a human is needed and identifying the category.\\n- Never invent field values. Use exact field names returned by the tool.\\n\\n## Authorization Output\\n- Use `reply` only for non-factual greetings, thanks/closings, instruction-tampering, or scope redirects.\\n- Use `clarify` for a focused question that advances WHAT or WHERE.\\n- Use `self_serve` for every factual answer or troubleshooting step. Include exact current-turn FAQ document ids in `faq_evidence_ids`, and direct copied support text in `grounding_quotes`. Every sentence in the player reply must contain at least one of those quotes.\\n- Use `escalate` only when a human is needed and configured form fields are still missing.\\n- Use `handoff` only when all configured fields are present or `handoff_override_reason` is `critical`, `explicit_human_request`, or `post_form_followup`.\\n- Always return every schema field. Use empty arrays, objects, or strings when a field does not apply.\\n\\n## Player-Facing Style\\nPlain text only. No Markdown, bullets, or bold markers. Never mention retrieval, FAQ search, knowledge base, or that nothing was found. If the player asks a clearly unrelated question, do not answer it; redirect to this game's support topics only.\";\nlet cached = staticData[cacheKey];\n\nfunction resolveConfigUrl() {\n  const url = String(runtime.configUrl || '').trim();\n  if (/^https?:\\/\\//i.test(url)) return url;\n  const base = String(runtime.helioBaseUrl || '').replace(/\\/$/, '');\n  if (!base) {\n    throw new Error('helioBaseUrl or absolute configUrl is required to load bot config');\n  }\n  return base + '/' + url.replace(/^\\//, '');\n}\n\nasync function loadConfig() {\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url: resolveConfigUrl(),\n    headers: { 'api-access-token': runtime.accessToken },\n    json: true,\n    timeout: 8000,\n  });\n  const config = response && typeof response === 'object' ? response : {};\n  staticData[cacheKey] = { expiresAt: now + ttlMs, configVersion: config.configVersion || 0, config };\n  return config;\n}\n\nif (!cached || !cached.expiresAt || cached.expiresAt <= now) {\n  cached = { config: await loadConfig() };\n}\n\nconst config = cached.config || {};\nconst botConfig = config.botConfig && typeof config.botConfig === 'object' ? config.botConfig : {};\nconst gameInstructions = config.systemMessage || botConfig.systemMessage || runtime.systemMessage || '';\nconst instructions = String(gameInstructions || '').trim();\nconst contract = String(runtimeContract || '').trim();\nconst composed = contract && instructions\n  ? contract + '\\n\\n## Game instructions\\n' + instructions\n  : (contract || instructions || null);\n\nreturn {\n  json: {\n    ...item,\n    botRuntimeConfig: botConfig,\n    botSystemMessage: composed,\n    botConfigVersion: config.configVersion || cached.configVersion || 0,\n    botConfigCacheTtlSeconds: 30,\n    runtimeRevision: runtime.runtimeRevision || \"helio-support-runtime-v7\",\n  },\n};"
+      },
+      "id": "19c5f7beb2a51296",
+      "name": "Load Bot Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ \"SELECT * FROM bot_load_ticket_state(\" + Number($('Accept Runtime Payload').first().json.accountId || $('Accept Runtime Payload').first().json.helioRuntime.accountId) + \", \" + Number($('Accept Runtime Payload').first().json.conversationId) + \", \" + Number($('Accept Runtime Payload').first().json.helioRuntime.agentBotId) + \");\" }}",
+        "options": {
+          "queryBatching": "single"
+        }
+      },
+      "id": "8cd2c4e91d9b1bc9",
+      "name": "Load Ticket State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        860,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "botPgNeonLocal01",
+          "name": "Bot Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prior = $('Load Bot Config').first().json || {};\nconst loaded = $input.item?.json || {};\nconst ticketState = {\n  found: Boolean(loaded.found),\n  phase: String(loaded.phase || 'idle'),\n  botStatus: String(loaded.bot_status || loaded.botStatus || 'idle'),\n  caseType: loaded.case_type || loaded.caseType || null,\n  lastIntent: loaded.last_intent || loaded.lastIntent || null,\n  supportState: loaded.support_state || loaded.supportState || {},\n  supportStateVersion: Number(loaded.support_state_version || loaded.supportStateVersion || 1),\n  clarificationPending: Boolean(loaded.clarification_pending || loaded.clarificationPending),\n  lastMessageId: loaded.last_message_id || loaded.lastMessageId || null,\n  updatedAt: loaded.updated_at || loaded.updatedAt || null,\n};\nreturn { json: { ...prior, ticketState } };"
+      },
+      "id": "ff636a85a0e8817e",
+      "name": "Merge Ticket State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "user_message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "170f74e2a0d50c1a"
+                  },
+                  {
+                    "leftValue": "={{ $json.ticketState.phase }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    },
+                    "id": "cb6c29f7e8d01551"
+                  },
+                  {
+                    "leftValue": "={{ $json.ticketState.botStatus }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    },
+                    "id": "0e90d78a23a3c654"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Player Message"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "form_submitted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "7f04df8887cbb7a6"
+                  },
+                  {
+                    "leftValue": "={{ $json.ticketState.phase }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    },
+                    "id": "7c8a35b83eb8db9f"
+                  },
+                  {
+                    "leftValue": "={{ $json.ticketState.botStatus }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    },
+                    "id": "ddfdb6293dbfbf42"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Form Submitted"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.ticketState.phase }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c81d1724373aa92b"
+                  },
+                  {
+                    "leftValue": "={{ $json.ticketState.botStatus }}",
+                    "rightValue": "human_owned",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "c78abc5dc4a7f9e4"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "Human Owned"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "792449ed0ec0e73a",
+      "name": "Route Runtime Turn",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1160,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Support Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge QA With Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge QA With Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Support Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search FAQ Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Support Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Fixer Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge QA With Routing Decision": {
+      "main": [
+        [
+          {
+            "node": "Finalize Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Support Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search FAQ Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Support Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Support Runtime Webhook": {
+      "main": [
+        [
+          {
+            "node": "Accept Runtime Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept Runtime Payload": {
+      "main": [
+        [
+          {
+            "node": "Load Bot Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Bot Config": {
+      "main": [
+        [
+          {
+            "node": "Load Ticket State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Ticket State": {
+      "main": [
+        [
+          {
+            "node": "Merge Ticket State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Ticket State": {
+      "main": [
+        [
+          {
+            "node": "Route Runtime Turn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Runtime Turn": {
+      "main": [
+        [
+          {
+            "node": "Support Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge QA With Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge QA With Routing Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "helioKind": "supportRuntime",
+    "helioProvisioned": true,
+    "runtimeRevision": "helio-support-runtime-v7",
+    "templateId": "helio-support-runtime"
+  }
+}

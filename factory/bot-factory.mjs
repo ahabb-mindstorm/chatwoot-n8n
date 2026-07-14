@@ -175,8 +175,7 @@ export async function ensureSharedSupportRuntime(options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const n8n = n8nConfig(env);
   const webhookBaseUrl = options.webhookBaseUrl || publicWebhookBaseUrl(env, n8n.baseUrl);
-  const mainTemplate = options.mainTemplate || (await loadMainTemplate());
-  const rendered = renderSharedSupportRuntime(mainTemplate, {
+  const rendered = renderSharedSupportRuntime(null, {
     webhookBaseUrl,
     revision: RUNTIME_REVISION,
   });

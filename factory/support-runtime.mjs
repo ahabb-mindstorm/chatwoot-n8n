@@ -6,9 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { buildN8nSupportRuntimeAdapterSource } from '../runtime/n8n-support-runtime-adapter.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const runtimeArtifactPath = join(
+  repoRoot,
+  'factory',
+  'artifacts',
+  'helio-support-runtime.json',
+);
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v6';
+export const RUNTIME_REVISION = 'helio-support-runtime-v7';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',
@@ -96,6 +102,9 @@ const SHARED_RUNTIME_DROP = new Set([
 ]);
 
 const LEGACY_RUNTIME_EFFECT_NODES = new Set([
+  'Get Escalation Requirements',
+  'Sticky Note e1bc1a27',
+  'Restore Debounced Context',
   'Route Requirement Lookup',
   'Send Reply',
   'Normalize Escalation Lookup',
@@ -210,7 +219,29 @@ export function renderIngressWorkflow(template, spec, options) {
   return workflow;
 }
 
-export function renderSharedSupportRuntime(template, options = {}) {
+export function renderSharedSupportRuntime(_template, options = {}) {
+  const revision = options.revision || RUNTIME_REVISION;
+  const artifact = JSON.parse(readFileSync(runtimeArtifactPath, 'utf8'));
+  if (artifact?.meta?.runtimeRevision !== revision) {
+    throw new Error(
+      `Support runtime artifact revision ${artifact?.meta?.runtimeRevision || 'missing'} does not match ${revision}`,
+    );
+  }
+  const workflow = cloneWithoutN8nIdentity(artifact);
+  const webhook = workflow.nodes.find(
+    (node) => node.name === 'Support Runtime Webhook',
+  );
+  if (webhook) {
+    webhook.notes = `Ingress workflows POST claimed batches here: ${webhookUrl(
+      options.webhookBaseUrl,
+      supportRuntimeWebhookPath(revision),
+    )}`;
+  }
+  return workflow;
+}
+
+/** Build-time migration helper. Production Factory publication loads the owned artifact above. */
+export function buildSharedSupportRuntimeArtifact(template, options = {}) {
   const revision = options.revision || RUNTIME_REVISION;
   const workflow = cloneWithoutN8nIdentity(template);
   workflow.name = supportRuntimeWorkflowName(revision);

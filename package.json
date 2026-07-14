@@ -26,6 +26,7 @@
     "workflow:deploy-chatwoot-pgvector-sync-via-mcp": "node scripts/generate-chatwoot-pgvector-sync-workflow.mjs && node scripts/deploy-chatwoot-pgvector-sync-via-mcp.mjs",
     "chatwoot:ensure-labels": "node --env-file=.env scripts/ensure-chatwoot-labels.mjs",
     "factory:start": "node --env-file=.env factory/server.mjs",
+    "factory:build-runtime": "node scripts/build-support-runtime-artifact.mjs",
     "factory:test": "node --test tests/bot-factory.test.mjs",
     "helio:verify-contract": "node scripts/verify-chatwoot-contract.mjs"
   },

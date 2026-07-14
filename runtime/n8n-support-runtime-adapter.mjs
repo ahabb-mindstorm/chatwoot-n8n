@@ -160,7 +160,9 @@ export function legacyOutputFromRuntimeReceipt(receipt, proposal, nextState) {
     ? 'escalate'
     : receipt.outcome === 'handoff'
       ? 'handoff'
-      : 'reply';
+      : receipt.outcome === 'ignored'
+        ? 'ignored'
+        : 'reply';
   return {
     action,
     reply: String(publicMessage?.text || proposal.reply || '').trim(),

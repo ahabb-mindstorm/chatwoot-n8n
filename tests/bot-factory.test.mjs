@@ -536,7 +536,16 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
     runtime.connections['Route Runtime Turn'].main[1][0].node,
     'Merge QA With Routing Decision',
   );
+  assert.equal(
+    runtime.connections['Route Runtime Turn'].main[2][0].node,
+    'Merge QA With Routing Decision',
+  );
   assert.match(JSON.stringify(routeTurn.parameters), /form_submitted/);
+  assert.match(JSON.stringify(routeTurn.parameters), /human_owned/);
+  assert.equal(
+    runtime.connections['Route Requirement Lookup'].main[2][0].node,
+    'Prepare Ticket State Persist',
+  );
 });
 
 test('provisionBotWorkflows creates ingress and ensures shared support runtime', async () => {

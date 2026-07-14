@@ -196,3 +196,55 @@ test('generated n8n adapter handles a form submission without executing Support 
   });
   assert.equal(result.json.output.action, 'handoff');
 });
+
+test('generated n8n adapter suppresses human-owned tickets without executing Support Agent', async () => {
+  const supportRuntimeSource = readFileSync(
+    join(root, 'runtime', 'support-runtime.mjs'),
+    'utf8',
+  );
+  const source = buildN8nSupportRuntimeAdapterSource(supportRuntimeSource);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    '$input',
+    '$',
+    '$getWorkflowStaticData',
+    source,
+  );
+  const nodes = {
+    'Accept Runtime Payload': {
+      route: 'user_message',
+      batchId: 'batch-human-owned-1',
+      conversationId: 9001,
+      messageId: 'message-human-owned-1',
+      content: 'Are you there?',
+      helioRuntime: { agentBotId: 42, runtimeRevision: 'runtime-test' },
+    },
+    'Load Bot Config': {
+      botConfigVersion: 12,
+      runtimeRevision: 'runtime-test',
+      botRuntimeConfig: { taxonomy: {}, escalationRequirements: {} },
+    },
+    'Merge Ticket State': {
+      ticketState: {
+        phase: 'human_owned',
+        botStatus: 'human_owned',
+        supportStateVersion: 8,
+        supportState: {},
+      },
+    },
+  };
+  const selectNode = (name) => {
+    if (name === 'Support Agent') throw new Error('Support Agent was bypassed');
+    return { first: () => ({ json: nodes[name] }) };
+  };
+
+  const [result] = await execute(
+    { first: () => ({ json: nodes['Merge Ticket State'] }) },
+    selectNode,
+    () => ({}),
+  );
+
+  assert.equal(result.json.runtimeReceipt.outcome, 'ignored');
+  assert.deepEqual(result.json.runtimeReceipt.effects, []);
+  assert.equal(result.json.output.action, 'ignored');
+});

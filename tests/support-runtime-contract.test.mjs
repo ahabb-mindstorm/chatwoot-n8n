@@ -326,6 +326,14 @@ test('an unresolved problem produces a form containing only missing escalation r
 
 test('an explicit human request can bypass the self-service and form gates', async () => {
   const commits = [];
+  let proposal = {
+    action: 'handoff',
+    reply: 'I will connect you with the team.',
+    category: 'account',
+    summary: 'The player explicitly asked for a human.',
+    collectedFields: {},
+    handoffOverrideReason: 'explicit_human_request',
+  };
   const runtime = createSupportRuntime({
     policySnapshots: {
       async getPublished() {
@@ -352,14 +360,7 @@ test('an explicit human request can bypass the self-service and form gates', asy
     },
     model: {
       async propose() {
-        return {
-          action: 'handoff',
-          reply: 'I will connect you with the team.',
-          category: 'account',
-          summary: 'The player explicitly asked for a human.',
-          collectedFields: {},
-          handoffOverrideReason: 'explicit_human_request',
-        };
+        return proposal;
       },
     },
     turns: {
@@ -401,6 +402,46 @@ test('an explicit human request can bypass the self-service and form gates', asy
       ['send_public_message', false],
       ['open_for_human', true],
     ],
+  );
+
+  const forgedOverride = await runtime.handleTurn({
+    deliveryId: 'delivery-forged-human-override',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-forged-human-override',
+        text: 'My account is not loading.',
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(forgedOverride.status, 'failed_closed');
+  assert.equal(forgedOverride.failureCode, 'invalid_runtime_proposal');
+
+  proposal = {
+    ...proposal,
+    collectedFields: { player_id: 'SQ-123' },
+    handoffOverrideReason: '',
+  };
+  const prematureCompleteHandoff = await runtime.handleTurn({
+    deliveryId: 'delivery-premature-complete-handoff',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-premature-complete-handoff',
+        text: 'My player id is SQ-123.',
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(prematureCompleteHandoff.status, 'failed_closed');
+  assert.equal(
+    prematureCompleteHandoff.failureCode,
+    'invalid_runtime_proposal',
   );
 });
 

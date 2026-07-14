@@ -98,6 +98,7 @@ export function createSupportRuntime(dependencies) {
             faqEvidence,
             policy,
             ticketState,
+            playerEvent,
           );
         }
       } catch (error) {
@@ -188,7 +189,13 @@ async function commitTurn(turns, turn) {
   }
 }
 
-function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
+function authorizeProposal(
+  proposal,
+  faqEvidence,
+  policy,
+  ticketState,
+  playerEvent,
+) {
   if (proposal.action === 'reply') {
     return { outcome: 'reply', reply: requiredReply(proposal) };
   }
@@ -295,6 +302,19 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
         `Unsupported handoff override: ${overrideReason}`,
       );
     }
+    if (
+      overrideReason &&
+      !handoffOverrideIsSupported(overrideReason, playerEvent, ticketState)
+    ) {
+      throw invalidRuntimeProposal(
+        `Handoff override is not supported by turn context: ${overrideReason}`,
+      );
+    }
+    if (!overrideReason && ticketState.selfServeAttempted !== true) {
+      throw invalidRuntimeProposal(
+        'Direct handoff requires prior self-service or a verified override',
+      );
+    }
     if (escalation.outcome !== 'handoff' && !overrideReason) {
       throw invalidRuntimeProposal(
         'Direct handoff requires complete fields or an allowed override',
@@ -310,6 +330,22 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
 
   throw invalidRuntimeProposal(
     `Unsupported runtime action: ${proposal?.action || 'missing'}`,
+  );
+}
+
+function handoffOverrideIsSupported(reason, playerEvent, ticketState) {
+  if (reason === 'critical') {
+    return playerEvent?.critical === true || ticketState.critical === true;
+  }
+  if (reason === 'post_form_followup') {
+    return ticketState.phase === 'request_form';
+  }
+  if (reason !== 'explicit_human_request') return false;
+  if (playerEvent?.requestsHuman === true) return true;
+  const text = String(playerEvent?.text || '');
+  return (
+    /\b(?:talk|speak|chat|connect|transfer|handoff|hand\s+off|want|need|give|let)\b.{0,40}\b(?:human|person|agent|representative|someone|team)\b/i.test(text) ||
+    /\b(?:human|person|agent|representative)\b.{0,24}\b(?:please|now)\b/i.test(text)
   );
 }
 

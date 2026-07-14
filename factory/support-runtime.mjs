@@ -221,6 +221,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
   patchRuntimeFaqAndMemory(workflow);
   patchRuntimeTaxonomyNodes(workflow);
   patchRuntimeAuthorizationBoundary(workflow);
+  patchRuntimeIgnoredOutcome(workflow);
   patchRuntimeOutboundReferences(workflow);
   sanitizeProGolfVocabulary(workflow);
 
@@ -239,6 +240,7 @@ export function renderSharedSupportRuntime(template, options = {}) {
   workflow.connections['Route Runtime Turn'] = {
     main: [
       [{ node: 'Support Agent', type: 'main', index: 0 }],
+      [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
       [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
     ],
   };
@@ -488,7 +490,13 @@ return {
 }
 
 function injectRuntimeTurnRouter(workflow) {
-  const condition = (route, id) => ({
+  const stringCondition = (leftValue, rightValue, operation, id) => ({
+    leftValue,
+    rightValue,
+    operator: { type: 'string', operation },
+    id: deterministicId(`shared-runtime-route-${id}`, 'condition'),
+  });
+  const routableCondition = (route, id) => ({
     conditions: {
       options: {
         caseSensitive: true,
@@ -497,24 +505,59 @@ function injectRuntimeTurnRouter(workflow) {
         version: 3,
       },
       conditions: [
-        {
-          leftValue: '={{ $json.route }}',
-          rightValue: route,
-          operator: { type: 'string', operation: 'equals' },
-          id: deterministicId(`shared-runtime-route-${id}`, 'condition'),
-        },
+        stringCondition('={{ $json.route }}', route, 'equals', `${id}-route`),
+        stringCondition(
+          '={{ $json.ticketState.phase }}',
+          'human_owned',
+          'notEquals',
+          `${id}-phase`,
+        ),
+        stringCondition(
+          '={{ $json.ticketState.botStatus }}',
+          'human_owned',
+          'notEquals',
+          `${id}-status`,
+        ),
       ],
       combinator: 'and',
     },
     renameOutput: true,
     outputKey: id,
   });
+  const humanOwnedCondition = {
+    conditions: {
+      options: {
+        caseSensitive: true,
+        leftValue: '',
+        typeValidation: 'strict',
+        version: 3,
+      },
+      conditions: [
+        stringCondition(
+          '={{ $json.ticketState.phase }}',
+          'human_owned',
+          'equals',
+          'human-owned-phase',
+        ),
+        stringCondition(
+          '={{ $json.ticketState.botStatus }}',
+          'human_owned',
+          'equals',
+          'human-owned-status',
+        ),
+      ],
+      combinator: 'or',
+    },
+    renameOutput: true,
+    outputKey: 'Human Owned',
+  };
   const node = {
     parameters: {
       rules: {
         values: [
-          condition('user_message', 'Player Message'),
-          condition('form_submitted', 'Form Submitted'),
+          routableCondition('user_message', 'Player Message'),
+          routableCondition('form_submitted', 'Form Submitted'),
+          humanOwnedCondition,
         ],
       },
       options: {},
@@ -668,6 +711,42 @@ function patchRuntimeAuthorizationBoundary(workflow) {
   node.notesInFlow = true;
   node.notes =
     'Authorization boundary: SupportRuntime validates current-turn FAQ evidence, escalation policy, ticket state, and handoff rules before legacy effect nodes execute.';
+}
+
+function patchRuntimeIgnoredOutcome(workflow) {
+  const route = workflow.nodes.find(
+    (candidate) => candidate.name === 'Route Requirement Lookup',
+  );
+  const values = route?.parameters?.rules?.values;
+  if (!Array.isArray(values)) return;
+  values.push({
+    conditions: {
+      options: {
+        caseSensitive: true,
+        leftValue: '',
+        typeValidation: 'strict',
+        version: 2,
+      },
+      combinator: 'and',
+      conditions: [
+        {
+          leftValue: '={{ $json.output.action }}',
+          rightValue: 'ignored',
+          operator: { type: 'string', operation: 'equals' },
+          id: deterministicId('shared-runtime-ignore-outcome', 'condition'),
+        },
+      ],
+    },
+    renameOutput: true,
+    outputKey: 'Ignored',
+  });
+  if (!workflow.connections['Route Requirement Lookup']) {
+    workflow.connections['Route Requirement Lookup'] = { main: [] };
+  }
+  const main = workflow.connections['Route Requirement Lookup'].main || [];
+  while (main.length < 3) main.push([]);
+  main[2] = [{ node: 'Prepare Ticket State Persist', type: 'main', index: 0 }];
+  workflow.connections['Route Requirement Lookup'].main = main;
 }
 
 /** Replace ingress-only node/$env refs with Accept Runtime Payload / helioRuntime. */

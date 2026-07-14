@@ -324,6 +324,86 @@ test('an unresolved problem produces a form containing only missing escalation r
   assert.deepEqual(commits[0].nextState.knownValues, { player_id: 'SQ-123' });
 });
 
+test('an explicit human request can bypass the self-service and form gates', async () => {
+  const commits = [];
+  const runtime = createSupportRuntime({
+    policySnapshots: {
+      async getPublished() {
+        return {
+          configVersion: 9,
+          taxonomy: { categories: [{ id: 'account', label: 'Account' }] },
+          escalationRequirements: {
+            account: {
+              items: [{ name: 'player_id', label: 'Player ID', type: 'text' }],
+            },
+          },
+        };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return {
+          action: 'handoff',
+          reply: 'I will connect you with the team.',
+          category: 'account',
+          summary: 'The player explicitly asked for a human.',
+          collectedFields: {},
+          handoffOverrideReason: 'explicit_human_request',
+        };
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        commits.push(turn);
+        return {
+          stateVersion: 1,
+          effectIds: turn.effects.map((effect) => effect.idempotencyKey),
+        };
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-explicit-human',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-explicit-human',
+        text: 'Let me talk to a person.',
+        attachments: [],
+      },
+    ],
+  });
+
+  assert.equal(receipt.outcome, 'handoff');
+  assert.equal(receipt.status, 'completed');
+  assert.equal(commits[0].nextState.phase, 'handoff');
+  assert.deepEqual(
+    receipt.effects.map((effect) => [effect.type, effect.critical]),
+    [
+      ['send_private_note', false],
+      ['set_label', false],
+      ['send_public_message', false],
+      ['open_for_human', true],
+    ],
+  );
+});
+
 test('a complete form submission produces an independent critical handoff effect', async () => {
   const commits = [];
   let modelCalled = false;

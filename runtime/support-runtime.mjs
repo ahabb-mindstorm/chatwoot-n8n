@@ -275,6 +275,39 @@ function authorizeProposal(proposal, faqEvidence, policy, ticketState) {
     };
   }
 
+  if (proposal.action === 'handoff') {
+    const escalation = resolveEscalationDecision({
+      policy,
+      category: proposal.category,
+      rewardSource: proposal.rewardSource || proposal.reward_source,
+      knownValueSources: [ticketState.knownValues, proposal.collectedFields],
+    });
+    const overrideReason = String(
+      proposal.handoffOverrideReason || proposal.handoff_override_reason || '',
+    ).trim();
+    const allowedOverrides = new Set([
+      'critical',
+      'explicit_human_request',
+      'post_form_followup',
+    ]);
+    if (overrideReason && !allowedOverrides.has(overrideReason)) {
+      throw invalidRuntimeProposal(
+        `Unsupported handoff override: ${overrideReason}`,
+      );
+    }
+    if (escalation.outcome !== 'handoff' && !overrideReason) {
+      throw invalidRuntimeProposal(
+        'Direct handoff requires complete fields or an allowed override',
+      );
+    }
+    return {
+      ...escalation,
+      outcome: 'handoff',
+      summary: String(proposal.summary || '').trim(),
+      ...(overrideReason ? { overrideReason } : {}),
+    };
+  }
+
   throw invalidRuntimeProposal(
     `Unsupported runtime action: ${proposal?.action || 'missing'}`,
   );

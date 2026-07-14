@@ -2,7 +2,7 @@
   "name": "chatwoot-n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/error-workflow.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs",
+    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/error-workflow.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs tests/n8n-support-runtime-adapter.test.mjs",
     "workflow:generate-postgres": "node scripts/generate-postgres-workflow.mjs",
     "test:webhook-scenario": "node scripts/run-webhook-scenarios.mjs",
     "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs",

@@ -493,6 +493,52 @@ test('shared support runtime uses policy-driven taxonomy, not ProGolf reward heu
   assert.match(formCode, /Accept Runtime Payload/);
 });
 
+test('shared support runtime authorizes agent proposals through SupportRuntime', () => {
+  const runtime = renderSharedSupportRuntime(loadMainTemplate(), {
+    webhookBaseUrl: 'https://n8n.example.test',
+  });
+  const agent = runtime.nodes.find((node) => node.name === 'Support Agent');
+  const parser = runtime.nodes.find((node) => node.name === 'Agent Output Parser');
+  const authorize = runtime.nodes.find(
+    (node) => node.name === 'Merge QA With Routing Decision',
+  );
+  const persist = runtime.nodes.find(
+    (node) => node.name === 'Prepare Ticket State Persist',
+  );
+  const routeTurn = runtime.nodes.find((node) => node.name === 'Route Runtime Turn');
+  const schema = JSON.parse(parser.parameters.inputSchema);
+  const code = String(authorize.parameters.jsCode || '');
+
+  assert.equal(agent.parameters.options.returnIntermediateSteps, true);
+  assert.deepEqual(schema.properties.action.enum, [
+    'reply',
+    'clarify',
+    'self_serve',
+    'escalate',
+    'handoff',
+  ]);
+  assert.equal(schema.properties.faq_evidence_ids.type, 'array');
+  assert.equal(schema.properties.grounding_quotes.type, 'array');
+  assert.ok(schema.required.includes('faq_evidence_ids'));
+  assert.ok(schema.required.includes('grounding_quotes'));
+
+  assert.match(code, /createSupportRuntime/);
+  assert.match(code, /handleTurn/);
+  assert.match(code, /intermediateSteps/);
+  assert.match(code, /runtimeReceipt/);
+  assert.doesNotMatch(code, /pass_through/);
+  assert.doesNotMatch(code, /\bexport\s+/);
+  assert.match(String(persist.parameters.jsCode), /runtimeNextState/);
+  assert.match(String(persist.parameters.jsCode), /self_serve_attempted/);
+  assert.equal(runtime.connections['Merge Ticket State'].main[0][0].node, 'Route Runtime Turn');
+  assert.equal(runtime.connections['Route Runtime Turn'].main[0][0].node, 'Support Agent');
+  assert.equal(
+    runtime.connections['Route Runtime Turn'].main[1][0].node,
+    'Merge QA With Routing Decision',
+  );
+  assert.match(JSON.stringify(routeTurn.parameters), /form_submitted/);
+});
+
 test('provisionBotWorkflows creates ingress and ensures shared support runtime', async () => {
   const spec = validSpec({
     gameId: 'space_quest',

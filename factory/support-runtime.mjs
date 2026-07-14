@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildN8nSupportRuntimeAdapterSource } from '../runtime/n8n-support-runtime-adapter.mjs';
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Shared support runtime revision for new Helio provisions. */
@@ -214,9 +216,11 @@ export function renderSharedSupportRuntime(template, options = {}) {
 
   injectRuntimeLoadBotConfig(workflow);
   injectRuntimeTicketState(workflow);
+  injectRuntimeTurnRouter(workflow);
   patchRuntimeSupportAgent(workflow);
   patchRuntimeFaqAndMemory(workflow);
   patchRuntimeTaxonomyNodes(workflow);
+  patchRuntimeAuthorizationBoundary(workflow);
   patchRuntimeOutboundReferences(workflow);
   sanitizeProGolfVocabulary(workflow);
 
@@ -230,7 +234,13 @@ export function renderSharedSupportRuntime(template, options = {}) {
     main: [[{ node: 'Merge Ticket State', type: 'main', index: 0 }]],
   };
   workflow.connections['Merge Ticket State'] = {
-    main: [[{ node: 'Support Agent', type: 'main', index: 0 }]],
+    main: [[{ node: 'Route Runtime Turn', type: 'main', index: 0 }]],
+  };
+  workflow.connections['Route Runtime Turn'] = {
+    main: [
+      [{ node: 'Support Agent', type: 'main', index: 0 }],
+      [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
+    ],
   };
   workflow.connections['Prepare Ticket State Persist'] = {
     main: [[{ node: 'Persist Ticket State', type: 'main', index: 0 }]],
@@ -397,21 +407,22 @@ const runtime = accept.helioRuntime || {};
 let merge = {};
 try { merge = $('Merge QA With Routing Decision').first().json || {}; } catch (e) { merge = {}; }
 const out = merge.output || merge.support_output || {};
-const action = String(out.action || 'reply').toLowerCase();
-let phase = 'clarify';
-if (action === 'handoff' || action === 'escalate' || action === 'notify') phase = 'handoff';
-else if (action === 'form' || action === 'send_form' || action === 'escalation_form') phase = 'route';
-else if (action === 'reply') {
-  const prior = (() => { try { return $('Merge Ticket State').first().json?.ticketState?.phase; } catch (e) { return 'idle'; } })();
-  phase = prior && prior !== 'idle' ? prior : 'clarify';
-}
-const knownFields = out.collected_fields && typeof out.collected_fields === 'object' ? out.collected_fields : {};
+const runtimeReceipt = merge.runtimeReceipt && typeof merge.runtimeReceipt === 'object' ? merge.runtimeReceipt : {};
+const runtimeNextState = merge.runtimeNextState && typeof merge.runtimeNextState === 'object' ? merge.runtimeNextState : {};
+const prior = (() => { try { return $('Merge Ticket State').first().json?.ticketState || {}; } catch (e) { return {}; } })();
+const runtimePhase = String(runtimeNextState.phase || prior.phase || 'idle').toLowerCase();
+const phase = runtimePhase === 'request_form' ? 'route' : runtimePhase;
+const knownFields = runtimeNextState.knownValues && typeof runtimeNextState.knownValues === 'object'
+  ? runtimeNextState.knownValues
+  : (out.collected_fields && typeof out.collected_fields === 'object' ? out.collected_fields : {});
 const supportState = {
   version: 1,
-  category: out.category || '',
-  reward_source: out.reward_source || out.rewardSource || '',
+  phase: runtimePhase,
+  category: runtimeNextState.category || out.category || '',
+  reward_source: runtimeNextState.rewardSource || out.reward_source || out.rewardSource || '',
   known_fields: knownFields,
-  summary: out.summary || '',
+  self_serve_attempted: runtimeNextState.selfServeAttempted === true,
+  summary: runtimeNextState.summary || out.summary || '',
   last_bot_reply_summary: String(out.reply || '').slice(0, 240),
   updated_at: new Date().toISOString(),
 };
@@ -423,8 +434,8 @@ return {
       agentBotId: Number(runtime.agentBotId),
       phase,
       botStatus: phase === 'handoff' ? 'handoff' : 'active',
-      caseType: out.category || null,
-      lastIntent: action,
+      caseType: runtimeNextState.category || out.category || null,
+      lastIntent: runtimeReceipt.outcome || out.runtime_outcome || out.action || 'reply',
       supportState,
       clarificationPending: phase === 'clarify',
       lastMessageId: accept.messageId != null ? String(accept.messageId) : null,
@@ -476,6 +487,50 @@ return {
   }
 }
 
+function injectRuntimeTurnRouter(workflow) {
+  const condition = (route, id) => ({
+    conditions: {
+      options: {
+        caseSensitive: true,
+        leftValue: '',
+        typeValidation: 'strict',
+        version: 3,
+      },
+      conditions: [
+        {
+          leftValue: '={{ $json.route }}',
+          rightValue: route,
+          operator: { type: 'string', operation: 'equals' },
+          id: deterministicId(`shared-runtime-route-${id}`, 'condition'),
+        },
+      ],
+      combinator: 'and',
+    },
+    renameOutput: true,
+    outputKey: id,
+  });
+  const node = {
+    parameters: {
+      rules: {
+        values: [
+          condition('user_message', 'Player Message'),
+          condition('form_submitted', 'Form Submitted'),
+        ],
+      },
+      options: {},
+    },
+    id: deterministicId('shared-runtime-route-turn', 'switch'),
+    name: 'Route Runtime Turn',
+    type: 'n8n-nodes-base.switch',
+    typeVersion: 3.4,
+    position: [1160, 300],
+  };
+  workflow.nodes = workflow.nodes.filter(
+    (candidate) => candidate.name !== 'Route Runtime Turn',
+  );
+  workflow.nodes.push(node);
+}
+
 function patchRuntimeSupportAgent(workflow) {
   const node = workflow.nodes.find((candidate) => candidate.name === 'Support Agent');
   if (!node) return;
@@ -483,6 +538,7 @@ function patchRuntimeSupportAgent(workflow) {
   node.parameters.options = {
     ...(node.parameters.options || {}),
     systemMessage: "={{ $('Load Bot Config').first().json.botSystemMessage }}",
+    returnIntermediateSteps: true,
   };
 }
 
@@ -537,6 +593,49 @@ function patchRuntimeTaxonomyNodes(workflow) {
         schema.properties.reward_source.description =
           'Reward source slug from this bot\'s published taxonomy when category is reward. Empty otherwise. Use unknown if unclear.';
       }
+      if (schema.properties?.action) {
+        schema.properties.action.enum = [
+          'reply',
+          'clarify',
+          'self_serve',
+          'escalate',
+          'handoff',
+        ];
+        schema.properties.action.description =
+          'Use reply only for non-factual greetings, closings, or scope redirects; clarify for a focused question; self_serve for every factual FAQ-grounded answer; escalate for a form; handoff for an authorized direct human transfer.';
+      }
+      schema.properties.faq_evidence_ids = {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Exact document ids from Search FAQ Knowledge Base used by a self_serve reply. Empty for every other action.',
+      };
+      schema.properties.grounding_quotes = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            evidence_id: { type: 'string' },
+            quote: { type: 'string' },
+          },
+          required: ['evidence_id', 'quote'],
+          additionalProperties: false,
+        },
+        description:
+          'Direct quotes copied from current-turn FAQ documents. Every self_serve sentence must contain at least one quote. Empty for every other action.',
+      };
+      schema.required = [
+        'action',
+        'reply',
+        'category',
+        'summary',
+        'reward_source',
+        'collected_fields',
+        'handoff_override_reason',
+        'faq_evidence_ids',
+        'grounding_quotes',
+      ];
+      schema.additionalProperties = false;
       let schemaText = JSON.stringify(schema, null, 2);
       schemaText = schemaText
         .replace(/redirect to Pro Golf support only/gi, "redirect to this game's support topics only")
@@ -551,6 +650,24 @@ function patchRuntimeTaxonomyNodes(workflow) {
       // Keep template schema if unparsable.
     }
   }
+}
+
+function patchRuntimeAuthorizationBoundary(workflow) {
+  const node = workflow.nodes.find(
+    (candidate) => candidate.name === 'Merge QA With Routing Decision',
+  );
+  if (!node) return;
+  const moduleSource = readFileSync(
+    join(repoRoot, 'runtime', 'support-runtime.mjs'),
+    'utf8',
+  );
+  node.parameters = {
+    mode: 'runOnceForAllItems',
+    jsCode: buildN8nSupportRuntimeAdapterSource(moduleSource),
+  };
+  node.notesInFlow = true;
+  node.notes =
+    'Authorization boundary: SupportRuntime validates current-turn FAQ evidence, escalation policy, ticket state, and handoff rules before legacy effect nodes execute.';
 }
 
 /** Replace ingress-only node/$env refs with Accept Runtime Payload / helioRuntime. */

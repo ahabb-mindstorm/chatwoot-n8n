@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import vm from 'node:vm';
 
 import { createSupportRuntime } from '../runtime/support-runtime.mjs';
 
@@ -150,6 +151,111 @@ test('a structurally invalid complete proposal also fails closed', async () => {
     events: [{ type: 'player_message', text: 'Hello', attachments: [] }],
   });
   assert.equal(unknownField.failureCode, 'invalid_runtime_proposal');
+});
+
+test('a complete proposal accepts plain objects created in another JavaScript realm', async () => {
+  const proposal = completeProposal({
+    action: 'reply',
+    reply: 'Hello!',
+    collectedFields: vm.runInNewContext('({})'),
+  });
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v14',
+    policySnapshots: {
+      async getPublished() {
+        return { configVersion: 11, taxonomy: { categories: [] } };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return proposal;
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        return {
+          stateVersion: 1,
+          effectIds: turn.effects.map((effect) => effect.idempotencyKey),
+        };
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-cross-realm-proposal',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [{ type: 'player_message', text: 'Hello', attachments: [] }],
+  });
+
+  assert.equal(receipt.status, 'completed');
+  assert.equal(receipt.outcome, 'reply');
+  assert.equal(receipt.failureCode, undefined);
+});
+
+test('a complete proposal accepts sandbox-wrapped plain records', async () => {
+  const wrappedPrototype = Object.create(Object.prototype);
+  const proposal = Object.assign(
+    Object.create(wrappedPrototype),
+    completeProposal({ action: 'reply', reply: 'Hello!' }),
+  );
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v14',
+    policySnapshots: {
+      async getPublished() {
+        return { configVersion: 11, taxonomy: { categories: [] } };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return proposal;
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        return {
+          stateVersion: 1,
+          effectIds: turn.effects.map((effect) => effect.idempotencyKey),
+        };
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-sandbox-wrapped-proposal',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [{ type: 'player_message', text: 'Hello', attachments: [] }],
+  });
+
+  assert.equal(receipt.status, 'completed');
+  assert.equal(receipt.outcome, 'reply');
 });
 
 test('a vague player problem produces a clarification turn through handleTurn', async () => {

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import vm from 'node:vm';
 
 import {
   buildN8nSupportRuntimeAdapterSource,
@@ -134,6 +135,53 @@ test('proposal adapter preserves invalid raw shape for strict validation', () =>
   assert.deepEqual(proposal.collectedFields, []);
   assert.equal(proposal.unexpected_field, true);
   assert.equal(Object.hasOwn(proposal, 'groundingQuotes'), false);
+});
+
+test('proposal adapter materializes collected fields in the local JavaScript realm', () => {
+  const collectedFields = vm.runInNewContext('({ device: "iOS" })');
+  const proposal = normalizeN8nProposal({
+    output: {
+      action: 'reply',
+      reply: 'Hello!',
+      category: 'other',
+      summary: '',
+      reward_source: '',
+      collected_fields: collectedFields,
+      handoff_override_reason: '',
+      faq_evidence_ids: [],
+      grounding_quotes: [],
+    },
+  });
+
+  assert.deepEqual(proposal.collectedFields, { device: 'iOS' });
+  assert.notEqual(proposal.collectedFields, collectedFields);
+  assert.equal(Object.getPrototypeOf(proposal.collectedFields), Object.prototype);
+});
+
+test('proposal adapter preserves non-record collected fields for strict validation', () => {
+  class Fields {
+    constructor() {
+      this.device = 'iOS';
+    }
+  }
+
+  for (const collectedFields of [new Fields(), new Date(), []]) {
+    const proposal = normalizeN8nProposal({
+      output: {
+        action: 'reply',
+        reply: 'Hello!',
+        category: 'other',
+        summary: '',
+        reward_source: '',
+        collected_fields: collectedFields,
+        handoff_override_reason: '',
+        faq_evidence_ids: [],
+        grounding_quotes: [],
+      },
+    });
+
+    assert.equal(proposal.collectedFields, collectedFields);
+  }
 });
 
 test('typed effect executor opens human handoff before noncritical decoration', async () => {

@@ -20,7 +20,7 @@ const runtimeRevisionRegistryPath = join(
 );
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v10';
+export const RUNTIME_REVISION = 'helio-support-runtime-v14';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',

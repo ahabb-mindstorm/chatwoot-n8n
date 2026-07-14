@@ -16,6 +16,26 @@ function n8nObject(value) {
     : {};
 }
 
+function materializeN8nPlainObject(value) {
+  const parsed = n8nParseMaybeJson(value);
+  if (!isN8nPlainObject(parsed)) {
+    return parsed;
+  }
+  return Object.fromEntries(Object.entries(parsed));
+}
+
+function isN8nPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype === null) return true;
+  const constructor = prototype.constructor;
+  return (
+    typeof constructor === 'function' &&
+    Function.prototype.toString.call(constructor) ===
+      Function.prototype.toString.call(Object)
+  );
+}
+
 export function normalizeN8nFaqEvidence(intermediateSteps) {
   const evidence = [];
   const seenObjects = new Set();
@@ -148,7 +168,9 @@ export function normalizeN8nProposal(agentItem) {
     }
     proposal[canonicalKey] = canonicalKey === 'groundingQuotes'
       ? mapN8nGroundingQuotes(value)
-      : value;
+      : canonicalKey === 'collectedFields'
+        ? materializeN8nPlainObject(value)
+        : value;
   }
   return proposal;
 }
@@ -587,6 +609,8 @@ export function buildN8nSupportRuntimeAdapterSource(supportRuntimeSource) {
     runtimeSource,
     n8nParseMaybeJson.toString(),
     n8nObject.toString(),
+    isN8nPlainObject.toString(),
+    materializeN8nPlainObject.toString(),
     normalizeN8nFaqEvidence.toString().replace(/^export\s+/, ''),
     normalizeN8nTicketState.toString().replace(/^export\s+/, ''),
     mapN8nGroundingQuotes.toString(),

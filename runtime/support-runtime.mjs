@@ -104,10 +104,9 @@ export function createSupportRuntime(dependencies) {
         }
       } catch (error) {
         status = 'failed_closed';
-        failureCode =
-          error?.code === 'invalid_runtime_proposal'
-            ? 'invalid_runtime_proposal'
-            : 'runtime_dependency_unavailable';
+        failureCode = error?.code === 'invalid_runtime_proposal'
+          ? 'invalid_runtime_proposal'
+          : 'runtime_dependency_unavailable';
         decision = {
           outcome: 'handoff',
           failedClosed: true,
@@ -241,7 +240,13 @@ function assertCompleteProposal(proposal) {
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  if (prototype === null) return true;
+  const constructor = prototype.constructor;
+  return (
+    typeof constructor === 'function' &&
+    Function.prototype.toString.call(constructor) ===
+      Function.prototype.toString.call(Object)
+  );
 }
 
 function unavailableReceipt(input, runtimeRevision, failureCode) {

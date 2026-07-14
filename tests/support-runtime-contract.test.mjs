@@ -420,6 +420,36 @@ test('an explicit human request can bypass the self-service and form gates', asy
   assert.equal(forgedOverride.status, 'failed_closed');
   assert.equal(forgedOverride.failureCode, 'invalid_runtime_proposal');
 
+  const gameplayAgentPhrase = await runtime.handleTurn({
+    deliveryId: 'delivery-gameplay-agent-phrase',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-gameplay-agent-phrase',
+        text: "The game won't let me select an agent character.",
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(gameplayAgentPhrase.status, 'failed_closed');
+
+  const secondExplicitRequest = await runtime.handleTurn({
+    deliveryId: 'delivery-second-explicit-human',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-second-explicit-human',
+        text: 'Get me a real person, please.',
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(secondExplicitRequest.status, 'completed');
+
   proposal = {
     ...proposal,
     collectedFields: { player_id: 'SQ-123' },
@@ -443,6 +473,41 @@ test('an explicit human request can bypass the self-service and form gates', asy
     prematureCompleteHandoff.failureCode,
     'invalid_runtime_proposal',
   );
+
+  proposal = {
+    ...proposal,
+    collectedFields: {},
+    handoffOverrideReason: 'critical',
+  };
+  const verifiedCritical = await runtime.handleTurn({
+    deliveryId: 'delivery-verified-critical',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-verified-critical',
+        text: 'My account was hacked and taken over.',
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(verifiedCritical.status, 'completed');
+
+  const forgedCritical = await runtime.handleTurn({
+    deliveryId: 'delivery-forged-critical',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-forged-critical',
+        text: 'My account is not loading.',
+        attachments: [],
+      },
+    ],
+  });
+  assert.equal(forgedCritical.status, 'failed_closed');
 });
 
 test('a complete form submission produces an independent critical handoff effect', async () => {

@@ -335,7 +335,14 @@ function authorizeProposal(
 
 function handoffOverrideIsSupported(reason, playerEvent, ticketState) {
   if (reason === 'critical') {
-    return playerEvent?.critical === true || ticketState.critical === true;
+    if (playerEvent?.critical === true || ticketState.critical === true) return true;
+    const text = String(playerEvent?.text || '');
+    return (
+      /\b(?:account|profile)\b.{0,32}\b(?:hacked|compromised|stolen|taken\s+over)\b/i.test(text) ||
+      /\b(?:hacked|compromised|stolen|taken\s+over)\b.{0,32}\b(?:account|profile)\b/i.test(text) ||
+      /\b(?:unauthori[sz]ed|fraudulent)\b.{0,28}\b(?:charge|purchase|transaction)\b/i.test(text) ||
+      /\b(?:charge|purchase|transaction)\b.{0,28}\b(?:unauthori[sz]ed|fraudulent)\b/i.test(text)
+    );
   }
   if (reason === 'post_form_followup') {
     return ticketState.phase === 'request_form';
@@ -344,8 +351,10 @@ function handoffOverrideIsSupported(reason, playerEvent, ticketState) {
   if (playerEvent?.requestsHuman === true) return true;
   const text = String(playerEvent?.text || '');
   return (
-    /\b(?:talk|speak|chat|connect|transfer|handoff|hand\s+off|want|need|give|let)\b.{0,40}\b(?:human|person|agent|representative|someone|team)\b/i.test(text) ||
-    /\b(?:human|person|agent|representative)\b.{0,24}\b(?:please|now)\b/i.test(text)
+    /\b(?:let\s+me\s+|want\s+to\s+|need\s+to\s+)?(?:talk|speak|chat)\s+(?:to|with)\s+(?:a\s+|an\s+|the\s+|real\s+)?(?:human|person|support\s+agent|representative|someone|team\s+member)\b/i.test(text) ||
+    /\b(?:connect|transfer|hand(?:\s|-)?off)\s+me\s+(?:to|with)\s+(?:a\s+|an\s+|the\s+|real\s+)?(?:human|person|support\s+agent|representative|someone|team)\b/i.test(text) ||
+    /\b(?:get\s+me|give\s+me|want|need)\s+(?:a\s+|an\s+|the\s+|real\s+)?(?:human|person|support\s+agent|representative)\b/i.test(text) ||
+    /\b(?:real\s+person|human\s+agent|support\s+agent|representative)\b.{0,16}\b(?:please|now)\b/i.test(text)
   );
 }
 

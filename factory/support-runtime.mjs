@@ -435,7 +435,7 @@ return {
       conversationId: Number(accept.conversationId),
       agentBotId: Number(runtime.agentBotId),
       phase,
-      botStatus: phase === 'handoff' ? 'handoff' : 'active',
+      botStatus: phase === 'human_owned' ? 'human_owned' : (phase === 'handoff' ? 'handoff' : 'active'),
       caseType: runtimeNextState.category || out.category || null,
       lastIntent: runtimeReceipt.outcome || out.runtime_outcome || out.action || 'reply',
       supportState,
@@ -719,6 +719,7 @@ function patchRuntimeIgnoredOutcome(workflow) {
   );
   const values = route?.parameters?.rules?.values;
   if (!Array.isArray(values)) return;
+  const ignoredOutputIndex = values.length;
   values.push({
     conditions: {
       options: {
@@ -744,8 +745,10 @@ function patchRuntimeIgnoredOutcome(workflow) {
     workflow.connections['Route Requirement Lookup'] = { main: [] };
   }
   const main = workflow.connections['Route Requirement Lookup'].main || [];
-  while (main.length < 3) main.push([]);
-  main[2] = [{ node: 'Prepare Ticket State Persist', type: 'main', index: 0 }];
+  while (main.length <= ignoredOutputIndex) main.push([]);
+  main[ignoredOutputIndex] = [
+    { node: 'Prepare Ticket State Persist', type: 'main', index: 0 },
+  ];
   workflow.connections['Route Requirement Lookup'].main = main;
 }
 

@@ -530,6 +530,10 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   assert.doesNotMatch(code, /\bexport\s+/);
   assert.match(String(persist.parameters.jsCode), /runtimeNextState/);
   assert.match(String(persist.parameters.jsCode), /self_serve_attempted/);
+  assert.match(
+    String(persist.parameters.jsCode),
+    /phase === 'human_owned' \? 'human_owned'/,
+  );
   assert.equal(runtime.connections['Merge Ticket State'].main[0][0].node, 'Route Runtime Turn');
   assert.equal(runtime.connections['Route Runtime Turn'].main[0][0].node, 'Support Agent');
   assert.equal(

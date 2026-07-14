@@ -272,7 +272,7 @@ test('renderMainWorkflow patches webhook path, name, meta, system message, and b
   assert.doesNotMatch(supportAgent.parameters.options.systemMessage, /Pro Caddy/);
   assert.equal(loadConfig.type, 'n8n-nodes-base.code');
   assert.match(loadConfig.parameters.jsCode, /Support Funnel|runtimeContract|Game instructions/);
-  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v3/);
+  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v4/);
   assert.match(loadConfig.parameters.jsCode, /api-access-token/);
   assert.match(loadConfig.parameters.jsCode, /configVersion/);
   assert.equal(
@@ -635,7 +635,7 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
   assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
 
-  assert.equal(result.runtimeRevision, 'helio-support-runtime-v3');
+  assert.equal(result.runtimeRevision, 'helio-support-runtime-v4');
   assert.equal(
     result.webhookUrl,
     'https://public-n8n.example.test/webhook/helio-space-quest-42-7-55-bot',
@@ -681,7 +681,7 @@ test('provisionBotWorkflows uses internal base for ingress→runtime invoke', as
 test('provisionBotWorkflows upserts existing ingress by deterministic name', async () => {
   const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
   const existingName = `Helio space_quest Ingress - account 42 inbox 7`;
-  const runtimeName = `Helio Support Runtime (helio-support-runtime-v3)`;
+  const runtimeName = `Helio Support Runtime (helio-support-runtime-v4)`;
   const { fetchImpl, calls } = createFakeFetch({
     ingressId: 'existing-ingress',
     runtimeId: 'existing-runtime',
@@ -807,7 +807,7 @@ test('provisionBotWorkflows upserts existing workflows by deterministic name', a
       },
       {
         id: 'runtime-workflow-id',
-        name: 'Helio Support Runtime (helio-support-runtime-v3)',
+        name: 'Helio Support Runtime (helio-support-runtime-v4)',
         active: true,
         updatedAt: '2026-06-01T00:00:00.000Z',
       },
@@ -1027,14 +1027,14 @@ test('server accepts a Helio-style provision request and returns usable webhook 
     assert.equal(response.status, 201);
     assert.equal(body.webhookUrl, 'https://public-n8n.example.test/webhook/helio-progolf-42-7-99-bot');
     assert.equal(body.ragTableName, 'bot_rag.faq_progolf_42_7_99');
-    assert.equal(body.runtimeRevision, 'helio-support-runtime-v3');
+    assert.equal(body.runtimeRevision, 'helio-support-runtime-v4');
     assert.deepEqual(body.workflowIds, {
       ingress: 'ingress-id',
       supportRuntime: 'runtime-id',
       main: 'ingress-id',
     });
     assert.deepEqual(createdNames.sort(), [
-      'Helio Support Runtime (helio-support-runtime-v3)',
+      'Helio Support Runtime (helio-support-runtime-v4)',
       'Helio progolf Ingress - account 42 inbox 7',
     ]);
   } finally {

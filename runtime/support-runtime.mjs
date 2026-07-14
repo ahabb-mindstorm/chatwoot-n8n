@@ -93,6 +93,7 @@ export function createSupportRuntime(dependencies) {
             ticketState,
             faqEvidence,
           });
+          assertCompleteProposal(proposal);
           decision = authorizeProposal(
             proposal,
             faqEvidence,
@@ -154,6 +155,93 @@ export function createSupportRuntime(dependencies) {
       };
     },
   };
+}
+
+const PROPOSAL_FIELDS = [
+  'action',
+  'reply',
+  'category',
+  'summary',
+  'rewardSource',
+  'collectedFields',
+  'handoffOverrideReason',
+  'faqEvidenceIds',
+  'groundingQuotes',
+];
+
+function assertCompleteProposal(proposal) {
+  if (!isPlainObject(proposal)) {
+    throw invalidRuntimeProposal('Runtime proposal must be an object');
+  }
+
+  const proposalKeys = Object.keys(proposal);
+  const missingFields = PROPOSAL_FIELDS.filter(
+    (field) => !Object.hasOwn(proposal, field),
+  );
+  const unknownFields = proposalKeys.filter(
+    (field) => !PROPOSAL_FIELDS.includes(field),
+  );
+  if (missingFields.length > 0 || unknownFields.length > 0) {
+    throw invalidRuntimeProposal(
+      `Runtime proposal shape is invalid (missing: ${missingFields.join(', ') || 'none'}; unknown: ${unknownFields.join(', ') || 'none'})`,
+    );
+  }
+
+  for (const field of [
+    'action',
+    'reply',
+    'category',
+    'summary',
+    'rewardSource',
+    'handoffOverrideReason',
+  ]) {
+    if (typeof proposal[field] !== 'string') {
+      throw invalidRuntimeProposal(`Runtime proposal ${field} must be a string`);
+    }
+  }
+
+  if (
+    !isPlainObject(proposal.collectedFields) ||
+    Object.values(proposal.collectedFields).some(
+      (value) => typeof value !== 'string',
+    )
+  ) {
+    throw invalidRuntimeProposal(
+      'Runtime proposal collectedFields must contain only string values',
+    );
+  }
+
+  if (
+    !Array.isArray(proposal.faqEvidenceIds) ||
+    proposal.faqEvidenceIds.some((value) => typeof value !== 'string')
+  ) {
+    throw invalidRuntimeProposal(
+      'Runtime proposal faqEvidenceIds must contain only strings',
+    );
+  }
+
+  if (
+    !Array.isArray(proposal.groundingQuotes) ||
+    proposal.groundingQuotes.some(
+      (grounding) =>
+        !isPlainObject(grounding) ||
+        Object.keys(grounding).length !== 2 ||
+        !Object.hasOwn(grounding, 'evidenceId') ||
+        !Object.hasOwn(grounding, 'quote') ||
+        typeof grounding.evidenceId !== 'string' ||
+        typeof grounding.quote !== 'string',
+    )
+  ) {
+    throw invalidRuntimeProposal(
+      'Runtime proposal groundingQuotes must contain evidenceId and quote strings',
+    );
+  }
+}
+
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function unavailableReceipt(input, runtimeRevision, failureCode) {

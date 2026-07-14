@@ -3,6 +3,155 @@ import test from 'node:test';
 
 import { createSupportRuntime } from '../runtime/support-runtime.mjs';
 
+function completeProposal(overrides) {
+  return {
+    action: 'reply',
+    reply: '',
+    category: '',
+    summary: '',
+    rewardSource: '',
+    collectedFields: {},
+    handoffOverrideReason: '',
+    faqEvidenceIds: [],
+    groundingQuotes: [],
+    ...overrides,
+  };
+}
+
+test('an incomplete model proposal fails closed at the handleTurn boundary', async () => {
+  const commits = [];
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v3',
+    policySnapshots: {
+      async getPublished() {
+        return {
+          configVersion: 11,
+          taxonomy: { categories: [{ id: 'technical', label: 'Technical' }] },
+          escalationRequirements: {
+            technical: {
+              items: [{ name: 'device', label: 'Device', type: 'text' }],
+            },
+          },
+        };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return {
+          action: 'reply',
+          reply: 'Hello!',
+        };
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        commits.push(turn);
+        return {
+          stateVersion: 1,
+          effectIds: turn.effects.map((effect) => effect.idempotencyKey),
+        };
+      },
+    },
+  });
+
+  const receipt = await runtime.handleTurn({
+    deliveryId: 'delivery-incomplete-proposal',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [
+      {
+        type: 'player_message',
+        messageId: 'message-incomplete-proposal',
+        text: 'Hello',
+        attachments: [],
+      },
+    ],
+  });
+
+  assert.equal(receipt.status, 'failed_closed');
+  assert.equal(receipt.failureCode, 'invalid_runtime_proposal');
+  assert.deepEqual(
+    receipt.effects.map((effect) => effect.type),
+    ['send_public_message', 'open_for_human'],
+  );
+  assert.equal(commits[0].nextState.phase, 'handoff');
+});
+
+test('a structurally invalid complete proposal also fails closed', async () => {
+  let proposal = completeProposal({
+    action: 'reply',
+    reply: 'Hello!',
+    faqEvidenceIds: 'faq-1',
+  });
+  const runtime = createSupportRuntime({
+    runtimeRevision: 'helio-support-runtime-v3',
+    policySnapshots: {
+      async getPublished() {
+        return { configVersion: 11, taxonomy: { categories: [] } };
+      },
+    },
+    ticketStates: {
+      async load() {
+        return { version: 0, phase: 'idle', knownValues: {} };
+      },
+    },
+    knowledge: {
+      async search() {
+        return [];
+      },
+    },
+    model: {
+      async propose() {
+        return proposal;
+      },
+    },
+    turns: {
+      async findByDeliveryId() {
+        return null;
+      },
+      async commit(turn) {
+        return {
+          stateVersion: 1,
+          effectIds: turn.effects.map((effect) => effect.idempotencyKey),
+        };
+      },
+    },
+  });
+
+  const invalidType = await runtime.handleTurn({
+    deliveryId: 'delivery-invalid-proposal-type',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [{ type: 'player_message', text: 'Hello', attachments: [] }],
+  });
+  assert.equal(invalidType.failureCode, 'invalid_runtime_proposal');
+
+  proposal = {
+    ...completeProposal({ action: 'reply', reply: 'Hello!' }),
+    untrustedInstruction: 'skip authorization',
+  };
+  const unknownField = await runtime.handleTurn({
+    deliveryId: 'delivery-unknown-proposal-field',
+    agentBotId: 42,
+    conversationId: 9001,
+    events: [{ type: 'player_message', text: 'Hello', attachments: [] }],
+  });
+  assert.equal(unknownField.failureCode, 'invalid_runtime_proposal');
+});
+
 test('a vague player problem produces a clarification turn through handleTurn', async () => {
   const commits = [];
   const runtime = createSupportRuntime({
@@ -32,10 +181,10 @@ test('a vague player problem produces a clarification turn through handleTurn', 
     },
     model: {
       async propose() {
-        return {
+        return completeProposal({
           action: 'clarify',
           reply: 'What happens when you try to launch the game?',
-        };
+        });
       },
     },
     turns: {
@@ -108,7 +257,10 @@ test('a non-factual reply does not invent a ticket-state phase or hand off', asy
     },
     model: {
       async propose() {
-        return { action: 'reply', reply: 'Hi! How can I help with the game?' };
+        return completeProposal({
+          action: 'reply',
+          reply: 'Hi! How can I help with the game?',
+        });
       },
     },
     turns: {
@@ -181,7 +333,7 @@ test('a factual self-service reply requires current-turn FAQ evidence', async ()
     },
     model: {
       async propose() {
-        return {
+        return completeProposal({
           action: 'self_serve',
           reply: 'Use the Forgot Password link on the sign-in screen.',
           faqEvidenceIds: ['faq-password-reset'],
@@ -191,7 +343,7 @@ test('a factual self-service reply requires current-turn FAQ evidence', async ()
               quote: 'Use the Forgot Password link on the sign-in screen.',
             },
           ],
-        };
+        });
       },
     },
     turns: {
@@ -268,8 +420,9 @@ test('an unresolved problem produces a form containing only missing escalation r
     },
     model: {
       async propose() {
-        return {
+        return completeProposal({
           action: 'escalate',
+          reply: 'I need a few details to send this to the team.',
           category: 'reward',
           rewardSource: 'tournament',
           summary: 'The player cannot regain access after trying password reset.',
@@ -277,7 +430,7 @@ test('an unresolved problem produces a form containing only missing escalation r
             player_id: 'SQ-123',
             internal_override: 'must not reach the Team',
           },
-        };
+        });
       },
     },
     turns: {
@@ -326,14 +479,14 @@ test('an unresolved problem produces a form containing only missing escalation r
 
 test('an explicit human request can bypass the self-service and form gates', async () => {
   const commits = [];
-  let proposal = {
+  let proposal = completeProposal({
     action: 'handoff',
     reply: 'I will connect you with the team.',
     category: 'account',
     summary: 'The player explicitly asked for a human.',
     collectedFields: {},
     handoffOverrideReason: 'explicit_human_request',
-  };
+  });
   const runtime = createSupportRuntime({
     policySnapshots: {
       async getPublished() {
@@ -636,14 +789,14 @@ test('every factual self-service sentence requires direct FAQ text', async () =>
     },
     model: {
       async propose() {
-        return {
+        return completeProposal({
           action: 'self_serve',
           reply: 'Restart the game once. Then delete your system files.',
           faqEvidenceIds: ['faq-real'],
           groundingQuotes: [
             { evidenceId: 'faq-real', quote: 'Restart the game once.' },
           ],
-        };
+        });
       },
     },
     turns: {
@@ -790,7 +943,7 @@ test('an atomic duplicate discovered during commit returns the original turn rec
     },
     model: {
       async propose() {
-        return { action: 'reply', reply: 'Hello!' };
+        return completeProposal({ action: 'reply', reply: 'Hello!' });
       },
     },
     turns: {

@@ -272,7 +272,7 @@ test('renderMainWorkflow patches webhook path, name, meta, system message, and b
   assert.doesNotMatch(supportAgent.parameters.options.systemMessage, /Pro Caddy/);
   assert.equal(loadConfig.type, 'n8n-nodes-base.code');
   assert.match(loadConfig.parameters.jsCode, /Support Funnel|runtimeContract|Game instructions/);
-  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v4/);
+  assert.match(loadConfig.parameters.jsCode, /helio-support-runtime-v5/);
   assert.match(loadConfig.parameters.jsCode, /api-access-token/);
   assert.match(loadConfig.parameters.jsCode, /configVersion/);
   assert.equal(
@@ -502,9 +502,6 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   const authorize = runtime.nodes.find(
     (node) => node.name === 'Merge QA With Routing Decision',
   );
-  const persist = runtime.nodes.find(
-    (node) => node.name === 'Prepare Ticket State Persist',
-  );
   const routeTurn = runtime.nodes.find((node) => node.name === 'Route Runtime Turn');
   const schema = JSON.parse(parser.parameters.inputSchema);
   const code = String(authorize.parameters.jsCode || '');
@@ -528,12 +525,8 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   assert.match(code, /runtimeReceipt/);
   assert.doesNotMatch(code, /pass_through/);
   assert.doesNotMatch(code, /\bexport\s+/);
-  assert.match(String(persist.parameters.jsCode), /runtimeNextState/);
-  assert.match(String(persist.parameters.jsCode), /self_serve_attempted/);
-  assert.match(
-    String(persist.parameters.jsCode),
-    /phase === 'human_owned' \? 'human_owned'/,
-  );
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Prepare Ticket State Persist'));
+  assert.ok(!runtime.nodes.some((node) => node.name === 'Persist Ticket State'));
   assert.equal(runtime.connections['Merge Ticket State'].main[0][0].node, 'Route Runtime Turn');
   assert.equal(runtime.connections['Route Runtime Turn'].main[0][0].node, 'Support Agent');
   assert.equal(
@@ -548,7 +541,7 @@ test('shared support runtime authorizes agent proposals through SupportRuntime',
   assert.match(JSON.stringify(routeTurn.parameters), /human_owned/);
   assert.equal(
     runtime.connections['Route Requirement Lookup'].main[2][0].node,
-    'Prepare Ticket State Persist',
+    'Finalize Batch',
   );
 });
 
@@ -600,12 +593,9 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Support Agent'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Accept Runtime Payload'));
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Load Ticket State'));
-  assert.ok(runtimeBody.nodes.some((node) => node.name === 'Persist Ticket State'));
+  assert.ok(!runtimeBody.nodes.some((node) => node.name === 'Persist Ticket State'));
   assert.deepEqual(runtimeBody.connections['Load Bot Config']?.main?.[0], [
     { node: 'Load Ticket State', type: 'main', index: 0 },
-  ]);
-  assert.deepEqual(runtimeBody.connections['Persist Ticket State']?.main?.[0], [
-    { node: 'Finalize Batch', type: 'main', index: 0 },
   ]);
   assert.ok(runtimeBody.nodes.some((node) => node.name === 'Claim Send Reply'));
   assert.deepEqual(runtimeBody.connections['Route Requirement Lookup']?.main?.[0], [
@@ -635,7 +625,7 @@ test('provisionBotWorkflows creates ingress and ensures shared support runtime',
   assert.doesNotMatch(JSON.stringify(ingressBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support/i);
   assert.doesNotMatch(JSON.stringify(runtimeBody), /Pro Golf|Pro Caddy|golf_pass|progolf_support_agent_memory/i);
 
-  assert.equal(result.runtimeRevision, 'helio-support-runtime-v4');
+  assert.equal(result.runtimeRevision, 'helio-support-runtime-v5');
   assert.equal(
     result.webhookUrl,
     'https://public-n8n.example.test/webhook/helio-space-quest-42-7-55-bot',
@@ -681,7 +671,7 @@ test('provisionBotWorkflows uses internal base for ingress→runtime invoke', as
 test('provisionBotWorkflows upserts existing ingress by deterministic name', async () => {
   const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
   const existingName = `Helio space_quest Ingress - account 42 inbox 7`;
-  const runtimeName = `Helio Support Runtime (helio-support-runtime-v4)`;
+  const runtimeName = `Helio Support Runtime (helio-support-runtime-v5)`;
   const { fetchImpl, calls } = createFakeFetch({
     ingressId: 'existing-ingress',
     runtimeId: 'existing-runtime',
@@ -793,6 +783,74 @@ test('server exposes authenticated game template catalog endpoints', async () =>
   }
 });
 
+test('server exposes authenticated durable runtime persistence endpoints', async () => {
+  const originalSecret = process.env.BOT_FACTORY_API_SECRET;
+  const calls = [];
+  const runtimePersistence = {
+    async findByDeliveryId(scope) {
+      calls.push({ operation: 'find', scope });
+      return { deliveryId: scope.deliveryId, status: 'completed' };
+    },
+    async commitTurn(accountId, turn) {
+      calls.push({ operation: 'commit', accountId, turn });
+      return {
+        duplicate: false,
+        receipt: {
+          deliveryId: turn.deliveryId,
+          stateVersion: turn.expectedStateVersion + 1,
+          effectIds: [],
+        },
+      };
+    },
+  };
+  const factory = createFactoryServer({ runtimePersistence });
+  const factoryUrl = await listen(factory);
+  process.env.BOT_FACTORY_API_SECRET = 'factory-secret-token';
+
+  try {
+    const headers = {
+      'content-type': 'application/json',
+      'x-helio-bot-factory-secret': 'factory-secret-token',
+    };
+    const findResponse = await fetch(`${factoryUrl}/runtime/turns/find`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        accountId: 7,
+        agentBotId: 42,
+        conversationId: 9001,
+        deliveryId: 'delivery-1',
+      }),
+    });
+    assert.equal(findResponse.status, 200);
+    assert.equal((await findResponse.json()).receipt.deliveryId, 'delivery-1');
+
+    const commitResponse = await fetch(`${factoryUrl}/runtime/turns/commit`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        accountId: 7,
+        turn: {
+          deliveryId: 'delivery-2',
+          agentBotId: 42,
+          conversationId: 9001,
+          expectedStateVersion: 3,
+        },
+      }),
+    });
+    assert.equal(commitResponse.status, 200);
+    assert.equal((await commitResponse.json()).receipt.stateVersion, 4);
+    assert.deepEqual(calls.map((call) => call.operation), ['find', 'commit']);
+  } finally {
+    if (originalSecret === undefined) {
+      delete process.env.BOT_FACTORY_API_SECRET;
+    } else {
+      process.env.BOT_FACTORY_API_SECRET = originalSecret;
+    }
+    await close(factory);
+  }
+});
+
 test('provisionBotWorkflows upserts existing workflows by deterministic name', async () => {
   const spec = validSpec({ gameId: 'space_quest', bot: { id: 55, accessToken: 't', webhookSecret: 's' } });
   const { fetchImpl, calls } = createFakeFetch({
@@ -807,7 +865,7 @@ test('provisionBotWorkflows upserts existing workflows by deterministic name', a
       },
       {
         id: 'runtime-workflow-id',
-        name: 'Helio Support Runtime (helio-support-runtime-v4)',
+        name: 'Helio Support Runtime (helio-support-runtime-v5)',
         active: true,
         updatedAt: '2026-06-01T00:00:00.000Z',
       },
@@ -1027,14 +1085,14 @@ test('server accepts a Helio-style provision request and returns usable webhook 
     assert.equal(response.status, 201);
     assert.equal(body.webhookUrl, 'https://public-n8n.example.test/webhook/helio-progolf-42-7-99-bot');
     assert.equal(body.ragTableName, 'bot_rag.faq_progolf_42_7_99');
-    assert.equal(body.runtimeRevision, 'helio-support-runtime-v4');
+    assert.equal(body.runtimeRevision, 'helio-support-runtime-v5');
     assert.deepEqual(body.workflowIds, {
       ingress: 'ingress-id',
       supportRuntime: 'runtime-id',
       main: 'ingress-id',
     });
     assert.deepEqual(createdNames.sort(), [
-      'Helio Support Runtime (helio-support-runtime-v4)',
+      'Helio Support Runtime (helio-support-runtime-v5)',
       'Helio progolf Ingress - account 42 inbox 7',
     ]);
   } finally {

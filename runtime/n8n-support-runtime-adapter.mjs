@@ -93,12 +93,14 @@ export function normalizeN8nTicketState(ticketState) {
       supportState.knownFields ||
       supportState.known_fields,
   );
-  const version = Number(
-    raw.supportStateVersion ??
-      raw.support_state_version ??
-      supportState.version ??
-      0,
-  );
+  const version = raw.found === false
+    ? 0
+    : Number(
+        raw.supportStateVersion ??
+          raw.support_state_version ??
+          supportState.version ??
+          0,
+      );
   return {
     version: Number.isFinite(version) ? version : 0,
     phase,
@@ -222,9 +224,24 @@ const proposal = normalizeN8nProposal(agentItem);
 const faqEvidence = normalizeN8nFaqEvidence(agentItem.intermediateSteps);
 const ticketState = normalizeN8nTicketState(mergedState.ticketState);
 const policy = n8nPublishedPolicy(loadConfig);
-const staticData = $getWorkflowStaticData('global');
-const ledgerKey = 'helio_support_runtime_turn_receipts';
-const ledger = n8nObject(staticData[ledgerKey]);
+const configuredPersistenceUrl = String(
+  $env.BOT_FACTORY_INTERNAL_URL || 'http://bot-factory:3020',
+);
+const persistenceBaseUrl = configuredPersistenceUrl.endsWith('/')
+  ? configuredPersistenceUrl.slice(0, -1)
+  : configuredPersistenceUrl;
+const persistenceSecret = String($env.BOT_FACTORY_API_SECRET || '').trim();
+if (!persistenceSecret) {
+  throw new Error('BOT_FACTORY_API_SECRET is required for durable runtime persistence');
+}
+const persistenceRequest = async (path, body) => this.helpers.httpRequest({
+  method: 'POST',
+  url: persistenceBaseUrl + path,
+  headers: { 'x-helio-bot-factory-secret': persistenceSecret },
+  body,
+  json: true,
+  timeout: 12000,
+});
 let committedTurn = null;
 
 const runtime = createSupportRuntime({
@@ -233,36 +250,33 @@ const runtime = createSupportRuntime({
   ticketStates: { async load() { return ticketState; } },
   knowledge: { async search() { return faqEvidence; } },
   model: { async propose() { return proposal; } },
-  turns: {
-    async findByDeliveryId(deliveryId) {
-      return ledger[String(deliveryId)] || null;
+      turns: {
+        async findByDeliveryId(deliveryId) {
+      const result = await persistenceRequest('/runtime/turns/find', {
+        accountId: Number(accept.accountId || accept.helioRuntime?.accountId),
+        agentBotId: Number(accept.helioRuntime?.agentBotId),
+        conversationId: Number(accept.conversationId),
+        deliveryId: String(deliveryId),
+      });
+      return result?.receipt || null;
     },
     async commit(turn) {
-      if (ledger[String(turn.deliveryId)]) {
+      const result = await persistenceRequest('/runtime/turns/commit', {
+        accountId: Number(accept.accountId || accept.helioRuntime?.accountId),
+        turn,
+      });
+      if (result?.duplicate === true) {
         const error = new Error('Duplicate runtime delivery');
         error.code = 'duplicate_delivery';
         throw error;
       }
       committedTurn = turn;
-      const stateVersion = Number(turn.expectedStateVersion || 0) + 1;
-      const receipt = {
-        deliveryId: turn.deliveryId,
-        outcome: turn.outcome,
-        status: turn.failureCode ? 'failed_closed' : 'completed',
-        runtimeRevision: turn.runtimeRevision,
-        policyVersion: turn.policyVersion,
-        stateVersion,
-        effectIds: turn.effects.map((effect) => effect.idempotencyKey),
-        effects: turn.effects,
-        ...(turn.failureCode ? { failureCode: turn.failureCode } : {}),
+      return {
+        stateVersion: Number(result?.receipt?.stateVersion),
+        effectIds: Array.isArray(result?.receipt?.effectIds)
+          ? result.receipt.effectIds
+          : [],
       };
-      ledger[String(turn.deliveryId)] = receipt;
-      const deliveryIds = Object.keys(ledger);
-      for (const expired of deliveryIds.slice(0, Math.max(0, deliveryIds.length - 500))) {
-        delete ledger[expired];
-      }
-      staticData[ledgerKey] = ledger;
-      return { stateVersion, effectIds: receipt.effectIds };
     },
   },
 });

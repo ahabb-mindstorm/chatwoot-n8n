@@ -10,11 +10,23 @@ import {
   provisionBotWorkflows,
 } from './bot-factory.mjs';
 import { getGameTemplate, listGameTemplateIds } from './game-templates.mjs';
+import {
+  RuntimePersistenceError,
+  createRuntimePersistenceFromEnv,
+} from './runtime-persistence.mjs';
 
 const PORT = Number(process.env.BOT_FACTORY_PORT || 3020);
 const MAX_BODY_BYTES = 1024 * 1024;
 
-export function createFactoryServer() {
+export function createFactoryServer(options = {}) {
+  let runtimePersistence = options.runtimePersistence || null;
+  const getRuntimePersistence = () => {
+    if (!runtimePersistence) {
+      runtimePersistence = createRuntimePersistenceFromEnv(options.env || process.env);
+    }
+    return runtimePersistence;
+  };
+
   return http.createServer(async (request, response) => {
     try {
       if (request.method === 'GET' && request.url === '/healthz') {
@@ -48,6 +60,19 @@ export function createFactoryServer() {
 
       authenticateFactoryRequest(request.headers, process.env.BOT_FACTORY_API_SECRET);
       const body = await readJsonBody(request);
+
+      if (request.url === '/runtime/turns/find') {
+        const receipt = await getRuntimePersistence().findByDeliveryId(body);
+        return sendJson(response, 200, { receipt });
+      }
+
+      if (request.url === '/runtime/turns/commit') {
+        const result = await getRuntimePersistence().commitTurn(
+          body.accountId,
+          body.turn,
+        );
+        return sendJson(response, 200, result);
+      }
 
       if (request.url === '/deprovision-bot') {
         const result = await deprovisionBotWorkflows(body);
@@ -121,7 +146,7 @@ function readJsonBody(request) {
 }
 
 function sendError(response, error) {
-  if (error instanceof FactoryError) {
+  if (error instanceof FactoryError || error instanceof RuntimePersistenceError) {
     return sendJson(response, error.statusCode, {
       error: error.message,
       details: error.details,

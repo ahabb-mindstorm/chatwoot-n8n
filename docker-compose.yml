@@ -31,6 +31,8 @@ services:
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
       # n8n→n8n calls (ingress → support runtime) must stay inside the container network.
       - N8N_INTERNAL_WEBHOOK_URL=${N8N_INTERNAL_WEBHOOK_URL:-http://127.0.0.1:5678}
+      - BOT_FACTORY_INTERNAL_URL=${BOT_FACTORY_INTERNAL_URL:-http://bot-factory:3020}
+      - BOT_FACTORY_API_SECRET=${BOT_FACTORY_API_SECRET}
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-UTC}
       - TZ=${TZ:-UTC}
       # Pass through to workflows via $env
@@ -84,6 +86,7 @@ services:
     working_dir: /app
     depends_on:
       - n8n
+      - postgres
     ports:
       - "${BOT_FACTORY_PORT:-3020}:3020"
     environment:
@@ -94,6 +97,12 @@ services:
       - N8N_API_KEY=${N8N_API_KEY}
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
       - HELIO_BASE_URL=${HELIO_BASE_URL:-http://host.docker.internal:3000}
+      - BOT_DB_HOST=${BOT_DB_HOST:-postgres}
+      - BOT_DB_PORT=${BOT_DB_PORT:-5432}
+      - BOT_DB_NAME=${BOT_DB_NAME:-chatwoot_bot}
+      - BOT_DB_USER=${BOT_DB_USER:-chatwoot_bot}
+      - BOT_DB_PASSWORD=${BOT_DB_PASSWORD:-chatwoot_bot}
+      - BOT_DB_SSL=${BOT_DB_SSL:-false}
     volumes:
       - ./:/app:ro
     command: ["node", "factory/server.mjs"]

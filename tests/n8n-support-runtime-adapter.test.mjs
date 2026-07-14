@@ -11,6 +11,49 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+function runtimePersistenceHarness() {
+  const receipts = new Map();
+  const env = {
+    BOT_FACTORY_INTERNAL_URL: 'http://factory.test',
+    BOT_FACTORY_API_SECRET: 'factory-secret',
+  };
+  const context = {
+    helpers: {
+      async httpRequest({ url, headers, body }) {
+        assert.equal(headers['x-helio-bot-factory-secret'], 'factory-secret');
+        if (url.endsWith('/runtime/turns/find')) {
+          return { receipt: receipts.get(body.deliveryId) || null };
+        }
+        if (!url.endsWith('/runtime/turns/commit')) {
+          throw new Error(`Unexpected persistence URL: ${url}`);
+        }
+        if (receipts.has(body.turn.deliveryId)) {
+          return {
+            duplicate: true,
+            receipt: receipts.get(body.turn.deliveryId),
+          };
+        }
+        const receipt = {
+          deliveryId: body.turn.deliveryId,
+          outcome: body.turn.outcome,
+          status: body.turn.failureCode ? 'failed_closed' : 'completed',
+          runtimeRevision: body.turn.runtimeRevision,
+          policyVersion: body.turn.policyVersion,
+          stateVersion: Number(body.turn.expectedStateVersion) + 1,
+          effectIds: body.turn.effects.map((effect) => effect.idempotencyKey),
+          effects: body.turn.effects,
+          ...(body.turn.failureCode
+            ? { failureCode: body.turn.failureCode }
+            : {}),
+        };
+        receipts.set(body.turn.deliveryId, receipt);
+        return { duplicate: false, receipt };
+      },
+    },
+  };
+  return { context, env };
+}
+
 test('FAQ evidence adapter accepts only current-turn FAQ tool observations', () => {
   const evidence = normalizeN8nFaqEvidence([
     {
@@ -42,6 +85,19 @@ test('FAQ evidence adapter accepts only current-turn FAQ tool observations', () 
   ]);
 });
 
+test('generated n8n adapter delegates turn persistence instead of using workflow static data', () => {
+  const supportRuntimeSource = readFileSync(
+    join(root, 'runtime', 'support-runtime.mjs'),
+    'utf8',
+  );
+  const source = buildN8nSupportRuntimeAdapterSource(supportRuntimeSource);
+
+  assert.doesNotMatch(source, /\$getWorkflowStaticData/);
+  assert.match(source, /BOT_FACTORY_INTERNAL_URL/);
+  assert.match(source, /\/runtime\/turns\/find/);
+  assert.match(source, /\/runtime\/turns\/commit/);
+});
+
 test('generated n8n adapter executes a grounded proposal through SupportRuntime', async () => {
   const supportRuntimeSource = readFileSync(
     join(root, 'runtime', 'support-runtime.mjs'),
@@ -53,6 +109,7 @@ test('generated n8n adapter executes a grounded proposal through SupportRuntime'
     '$input',
     '$',
     '$getWorkflowStaticData',
+    '$env',
     source,
   );
   const nodes = {
@@ -116,7 +173,14 @@ test('generated n8n adapter executes a grounded proposal through SupportRuntime'
   const input = { first: () => ({ json: nodes['Support Agent'] }) };
   const selectNode = (name) => ({ first: () => ({ json: nodes[name] }) });
 
-  const [result] = await execute(input, selectNode, () => staticData);
+  const persistence = runtimePersistenceHarness();
+  const [result] = await execute.call(
+    persistence.context,
+    input,
+    selectNode,
+    () => staticData,
+    persistence.env,
+  );
 
   assert.equal(result.json.runtimeReceipt.outcome, 'self_serve');
   assert.equal(result.json.runtimeReceipt.status, 'completed');
@@ -138,6 +202,7 @@ test('generated n8n adapter handles a form submission without executing Support 
     '$input',
     '$',
     '$getWorkflowStaticData',
+    '$env',
     source,
   );
   const nodes = {
@@ -182,10 +247,13 @@ test('generated n8n adapter handles a form submission without executing Support 
     return { first: () => ({ json: nodes[name] }) };
   };
 
-  const [result] = await execute(
+  const persistence = runtimePersistenceHarness();
+  const [result] = await execute.call(
+    persistence.context,
     { first: () => ({ json: nodes['Merge Ticket State'] }) },
     selectNode,
     () => ({}),
+    persistence.env,
   );
 
   assert.equal(result.json.runtimeReceipt.outcome, 'handoff');
@@ -208,6 +276,7 @@ test('generated n8n adapter suppresses human-owned tickets without executing Sup
     '$input',
     '$',
     '$getWorkflowStaticData',
+    '$env',
     source,
   );
   const nodes = {
@@ -238,10 +307,13 @@ test('generated n8n adapter suppresses human-owned tickets without executing Sup
     return { first: () => ({ json: nodes[name] }) };
   };
 
-  const [result] = await execute(
+  const persistence = runtimePersistenceHarness();
+  const [result] = await execute.call(
+    persistence.context,
     { first: () => ({ json: nodes['Merge Ticket State'] }) },
     selectNode,
     () => ({}),
+    persistence.env,
   );
 
   assert.equal(result.json.runtimeReceipt.outcome, 'ignored');

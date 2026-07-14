@@ -19,6 +19,7 @@ Self-hosted Chatwoot **Agent Bot** posts webhooks into n8n. n8n normalizes paylo
    docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/001_bot_support_state.sql
    docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/006_idempotency_debounce.sql
    docker compose exec -T postgres psql -U "${POSTGRES_USER:-chatwoot_bot}" -d "${POSTGRES_DB:-chatwoot_bot}" < migrations/007_agent_bot_kill_switch.sql
+   npm run db:migrate-support-runtime
    ```
    From the host (default mapped port `5433`):
    ```bash

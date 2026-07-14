@@ -1,4 +1,6 @@
 x-n8n-environment: &n8n-environment
+  BOT_FACTORY_INTERNAL_URL: ${BOT_FACTORY_INTERNAL_URL:-http://bot-factory:3020}
+  BOT_FACTORY_API_SECRET: ${BOT_FACTORY_API_SECRET}
   N8N_HOST: ${N8N_HOST:-0.0.0.0}
   N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
   N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-false}
@@ -146,6 +148,35 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+
+  bot-factory:
+    image: node:22-alpine
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    ports:
+      - "${BOT_FACTORY_PORT:-3020}:3020"
+    environment:
+      BOT_FACTORY_PORT: 3020
+      BOT_FACTORY_API_SECRET: ${BOT_FACTORY_API_SECRET}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
+      N8N_INTERNAL_WEBHOOK_URL: ${N8N_INTERNAL_WEBHOOK_URL:-http://n8n:5678}
+      N8N_API_KEY: ${N8N_API_KEY}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      HELIO_BASE_URL: ${HELIO_BASE_URL:-http://host.docker.internal:3000}
+      BOT_DB_HOST: ${BOT_DB_HOST:-postgres}
+      BOT_DB_PORT: ${BOT_DB_PORT:-5432}
+      BOT_DB_NAME: ${BOT_DB_NAME:-chatwoot_bot}
+      BOT_DB_USER: ${BOT_DB_USER:-chatwoot_bot}
+      BOT_DB_PASSWORD: ${BOT_DB_PASSWORD:-chatwoot_bot}
+      BOT_DB_SSL: ${BOT_DB_SSL:-false}
+    volumes:
+      - ./:/app:ro
+    command: ["node", "factory/server.mjs"]
     restart: unless-stopped
 
 volumes:

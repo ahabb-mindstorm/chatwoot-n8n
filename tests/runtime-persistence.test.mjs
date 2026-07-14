@@ -1,0 +1,124 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+import {
+  RuntimePersistenceError,
+  createPostgresRuntimePersistence,
+} from '../factory/runtime-persistence.mjs';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+test('Postgres runtime persistence scopes receipt lookup and delegates atomic commit', async () => {
+  const queries = [];
+  const pool = {
+    async query(text, values) {
+      queries.push({ text, values });
+      if (text.includes('FROM bot_support_turns')) {
+        return { rows: [{ receipt: { deliveryId: 'delivery-1' } }] };
+      }
+      return {
+        rows: [
+          {
+            result: {
+              duplicate: false,
+              receipt: {
+                deliveryId: 'delivery-2',
+                stateVersion: 4,
+                effectIds: ['delivery-2:public-reply'],
+              },
+            },
+          },
+        ],
+      };
+    },
+  };
+  const persistence = createPostgresRuntimePersistence(pool);
+
+  const receipt = await persistence.findByDeliveryId({
+    accountId: 7,
+    agentBotId: 42,
+    conversationId: 9001,
+    deliveryId: 'delivery-1',
+  });
+  assert.equal(receipt.deliveryId, 'delivery-1');
+  assert.deepEqual(queries[0].values, [7, 42, 9001, 'delivery-1']);
+
+  const committed = await persistence.commitTurn(7, {
+    deliveryId: 'delivery-2',
+    agentBotId: 42,
+    conversationId: 9001,
+    expectedStateVersion: 3,
+    outcome: 'reply',
+    nextState: { phase: 'idle', knownValues: {} },
+    effects: [
+      {
+        type: 'send_public_message',
+        idempotencyKey: 'delivery-2:public-reply',
+        text: 'Hello',
+        critical: true,
+      },
+    ],
+    runtimeRevision: 'helio-support-runtime-v5',
+    policyVersion: 12,
+  });
+  assert.equal(committed.duplicate, false);
+  assert.equal(committed.receipt.stateVersion, 4);
+  assert.match(queries[1].text, /bot_commit_support_turn/);
+  assert.equal(queries[1].values[4], 3);
+  assert.deepEqual(JSON.parse(queries[1].values[7]), [
+    {
+      type: 'send_public_message',
+      idempotencyKey: 'delivery-2:public-reply',
+      text: 'Hello',
+      critical: true,
+    },
+  ]);
+});
+
+test('Postgres runtime persistence exposes optimistic conflicts without retrying effects', async () => {
+  const pool = {
+    async query() {
+      const error = new Error('ticket state version conflict');
+      error.code = '40001';
+      throw error;
+    },
+  };
+  const persistence = createPostgresRuntimePersistence(pool);
+
+  await assert.rejects(
+    persistence.commitTurn(7, {
+      deliveryId: 'delivery-conflict',
+      agentBotId: 42,
+      conversationId: 9001,
+      expectedStateVersion: 3,
+      outcome: 'reply',
+      nextState: { phase: 'idle' },
+      effects: [],
+      runtimeRevision: 'helio-support-runtime-v5',
+      policyVersion: 12,
+    }),
+    (error) =>
+      error instanceof RuntimePersistenceError &&
+      error.statusCode === 409 &&
+      error.details.code === 'ticket_state_conflict',
+  );
+});
+
+test('support runtime migration commits receipt, state version, and pending effects together', () => {
+  const migration = readFileSync(
+    join(root, 'migrations', '013_support_runtime_turns.sql'),
+    'utf8',
+  );
+
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS bot_support_turns/);
+  assert.match(migration, /UNIQUE \(agent_bot_id, delivery_id\)/);
+  assert.match(migration, /FOR UPDATE/);
+  assert.match(migration, /support_state_version = p_expected_state_version/);
+  assert.match(migration, /RAISE EXCEPTION 'ticket state version conflict'.*40001/s);
+  assert.match(migration, /INSERT INTO bot_outbound_effects/);
+  assert.match(migration, /'pending', 0/);
+  assert.match(migration, /UPDATE bot_support_turns[\s\S]*receipt = v_receipt/);
+});

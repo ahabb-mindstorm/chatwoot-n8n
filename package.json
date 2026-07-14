@@ -2,7 +2,7 @@
   "name": "chatwoot-n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/error-workflow.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs tests/n8n-support-runtime-adapter.test.mjs",
+    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/error-workflow.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs tests/n8n-support-runtime-adapter.test.mjs tests/runtime-persistence.test.mjs",
     "workflow:generate-postgres": "node scripts/generate-postgres-workflow.mjs",
     "test:webhook-scenario": "node scripts/run-webhook-scenarios.mjs",
     "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs",
@@ -16,6 +16,7 @@
     "workflow:patch-explicit-assignee": "node --env-file=.env scripts/patch-explicit-assignee.mjs",
     "workflow:patch-idempotency": "node scripts/patch-idempotency-debounce.mjs",
     "db:migrate-idempotency": "node --env-file=.env scripts/apply-idempotency-migration.mjs",
+    "db:migrate-support-runtime": "node --env-file=.env scripts/apply-support-runtime-migration.mjs",
     "workflow:deploy-v2-via-mcp": "node scripts/generate-v2-workflow-sdk.mjs && node scripts/deploy-v2-via-mcp.mjs",
     "workflow:validate-prod-hardening": "node scripts/validate-prod-hardening-via-mcp.mjs",
     "workflow:deploy-prod-hardening": "node scripts/deploy-prod-hardening-via-mcp.mjs",

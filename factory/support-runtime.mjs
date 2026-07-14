@@ -8,7 +8,7 @@ import { buildN8nSupportRuntimeAdapterSource } from '../runtime/n8n-support-runt
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Shared support runtime revision for new Helio provisions. */
-export const RUNTIME_REVISION = 'helio-support-runtime-v4';
+export const RUNTIME_REVISION = 'helio-support-runtime-v5';
 
 const AGENT_NODE_NAMES = new Set([
   'Support Agent',
@@ -244,13 +244,6 @@ export function renderSharedSupportRuntime(template, options = {}) {
       [{ node: 'Merge QA With Routing Decision', type: 'main', index: 0 }],
     ],
   };
-  workflow.connections['Prepare Ticket State Persist'] = {
-    main: [[{ node: 'Persist Ticket State', type: 'main', index: 0 }]],
-  };
-  workflow.connections['Persist Ticket State'] = {
-    main: [[{ node: 'Finalize Batch', type: 'main', index: 0 }]],
-  };
-
   return workflow;
 }
 
@@ -401,71 +394,6 @@ return { json: { ...prior, ticketState } };`,
     position: [1020, 300],
   };
 
-  const preparePersist = {
-    parameters: {
-      mode: 'runOnceForEachItem',
-      jsCode: `const accept = $('Accept Runtime Payload').first().json || {};
-const runtime = accept.helioRuntime || {};
-let merge = {};
-try { merge = $('Merge QA With Routing Decision').first().json || {}; } catch (e) { merge = {}; }
-const out = merge.output || merge.support_output || {};
-const runtimeReceipt = merge.runtimeReceipt && typeof merge.runtimeReceipt === 'object' ? merge.runtimeReceipt : {};
-const runtimeNextState = merge.runtimeNextState && typeof merge.runtimeNextState === 'object' ? merge.runtimeNextState : {};
-const prior = (() => { try { return $('Merge Ticket State').first().json?.ticketState || {}; } catch (e) { return {}; } })();
-const runtimePhase = String(runtimeNextState.phase || prior.phase || 'idle').toLowerCase();
-const phase = runtimePhase === 'request_form' ? 'route' : runtimePhase;
-const knownFields = runtimeNextState.knownValues && typeof runtimeNextState.knownValues === 'object'
-  ? runtimeNextState.knownValues
-  : (out.collected_fields && typeof out.collected_fields === 'object' ? out.collected_fields : {});
-const supportState = {
-  version: 1,
-  phase: runtimePhase,
-  category: runtimeNextState.category || out.category || '',
-  reward_source: runtimeNextState.rewardSource || out.reward_source || out.rewardSource || '',
-  known_fields: knownFields,
-  self_serve_attempted: runtimeNextState.selfServeAttempted === true,
-  summary: runtimeNextState.summary || out.summary || '',
-  last_bot_reply_summary: String(out.reply || '').slice(0, 240),
-  updated_at: new Date().toISOString(),
-};
-return {
-  json: {
-    ticketStateUpsert: {
-      accountId: Number(accept.accountId || runtime.accountId),
-      conversationId: Number(accept.conversationId),
-      agentBotId: Number(runtime.agentBotId),
-      phase,
-      botStatus: phase === 'human_owned' ? 'human_owned' : (phase === 'handoff' ? 'handoff' : 'active'),
-      caseType: runtimeNextState.category || out.category || null,
-      lastIntent: runtimeReceipt.outcome || out.runtime_outcome || out.action || 'reply',
-      supportState,
-      clarificationPending: phase === 'clarify',
-      lastMessageId: accept.messageId != null ? String(accept.messageId) : null,
-    },
-  },
-};`,
-    },
-    id: deterministicId('shared-runtime-prepare-ticket-persist', 'code'),
-    name: 'Prepare Ticket State Persist',
-    type: 'n8n-nodes-base.code',
-    typeVersion: 2,
-    position: [4600, 300],
-  };
-
-  const persistNode = {
-    parameters: {
-      operation: 'executeQuery',
-      query: `={{ (() => { const u = $json.ticketStateUpsert || {}; const state = JSON.stringify(u.supportState || {}).replace(/'/g, "''"); return "SELECT * FROM bot_upsert_ticket_state(" + Number(u.accountId) + ", " + Number(u.conversationId) + ", " + Number(u.agentBotId) + ", '" + String(u.phase || 'idle').replace(/'/g, "''") + "', '" + String(u.botStatus || u.phase || 'idle').replace(/'/g, "''") + "', " + (u.caseType ? ("'" + String(u.caseType).replace(/'/g, "''") + "'") : "NULL") + ", " + (u.lastIntent ? ("'" + String(u.lastIntent).replace(/'/g, "''") + "'") : "NULL") + ", '" + state + "'::jsonb, " + (u.clarificationPending ? "TRUE" : "FALSE") + ", " + (u.lastMessageId ? ("'" + String(u.lastMessageId).replace(/'/g, "''") + "'") : "NULL") + ");"; })() }}`,
-      options: { queryBatching: 'single' },
-    },
-    id: deterministicId('shared-runtime-persist-ticket-state', 'pg'),
-    name: 'Persist Ticket State',
-    type: 'n8n-nodes-base.postgres',
-    typeVersion: 2.5,
-    position: [4820, 300],
-    credentials: postgresCreds,
-  };
-
   const drop = new Set([
     'Load Ticket State',
     'Merge Ticket State',
@@ -473,20 +401,7 @@ return {
     'Persist Ticket State',
   ]);
   workflow.nodes = workflow.nodes.filter((node) => !drop.has(node.name));
-  workflow.nodes.push(loadNode, mergeNode, preparePersist, persistNode);
-
-  // Route every former Finalize Batch edge through persist.
-  for (const [from, conn] of Object.entries(workflow.connections || {})) {
-    if (from === 'Persist Ticket State' || from === 'Prepare Ticket State Persist') continue;
-    const main = conn?.main;
-    if (!Array.isArray(main)) continue;
-    for (const branch of main) {
-      if (!Array.isArray(branch)) continue;
-      for (const edge of branch) {
-        if (edge?.node === 'Finalize Batch') edge.node = 'Prepare Ticket State Persist';
-      }
-    }
-  }
+  workflow.nodes.push(loadNode, mergeNode);
 }
 
 function injectRuntimeTurnRouter(workflow) {
@@ -747,7 +662,7 @@ function patchRuntimeIgnoredOutcome(workflow) {
   const main = workflow.connections['Route Requirement Lookup'].main || [];
   while (main.length <= ignoredOutputIndex) main.push([]);
   main[ignoredOutputIndex] = [
-    { node: 'Prepare Ticket State Persist', type: 'main', index: 0 },
+    { node: 'Finalize Batch', type: 'main', index: 0 },
   ];
   workflow.connections['Route Requirement Lookup'].main = main;
 }

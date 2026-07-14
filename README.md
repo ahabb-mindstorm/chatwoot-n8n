@@ -157,25 +157,38 @@ Regenerate workflow after editing `scripts/generate-postgres-workflow.mjs`:
 npm run workflow:generate-postgres
 ```
 
-The router reads `content_attributes.submitted_values` from Chatwoot `input_select` and `form` submissions. It also accepts plain text fallback values that match current option IDs or labels, and stores attachment metadata when an active `upload` node receives a Chatwoot message with `attachments`.
+### Test workflow with no Chatwoot writes
 
-### FAQ source
+Workflow: `workflows/progolf-support-bot-v2-pgvector-test.json` (webhook `progolf-support-bot-v2-pgvector-test`).
 
-Starter FAQ lives in `knowledge/faq.json`. Duplicate content into workflow node **Build Knowledge Pack** (`knowledgePack` array); n8n Code nodes cannot read repo files unless you mount them and swap in a filesystem node yourself.
+This is a generated replay workflow copied from the production PGVector workflow. It keeps the core bot path, RAG, memory, routing, forms, handoff preparation, idempotency, and outbound-effect completion logic, but replaces Chatwoot mutation HTTP nodes with Code nodes that capture the request body instead of posting it.
 
-Fast MVP passes the full small FAQ list to the LLM. This is fine while docs are compact. Later, replace **Build Knowledge Pack** with vector retrieval or an AI Agent tool like `search_knowledge_base`.
+Suppressed Chatwoot actions:
 
-### Production notes
+- Public bot replies
+- Escalation forms
+- Conversation custom attributes
+- Private handoff notes
+- Labels
+- Player handoff notification
+- Conversation open/status changes
+- Typing indicators
 
-| Concern | Where |
-|--------|--------|
-| Idempotency + debounce | `bot_inbound_events`, `bot_conversation_leases`, and `bot_outbound_effects`; two-second quiet-window batching with minute recovery |
-| Repeated failed turns | `FAILED_TURN_THRESHOLD` (legacy tracker; Postgres bot fail-closed on low confidence) |
-| Guided-flow state | Legacy: Chatwoot `n8n_guided_flow`; Postgres bot: `bot_conversation_state.flow_state` |
-| Guided-flow source | `Fetch Guided Flow` Code node; replace later with API HTTP Request |
-| n8n runtime persistence | Compose volume `n8n_data`; back up `.n8n` dir regularly |
-| Bot DB persistence | Compose volume `postgres_data`; run migrations on upgrade |
-| Metrics | Subscribe to Chatwoot webhooks separately or scrape n8n execution logs |
+Safety differences from production:
+
+- Webhook auth is bypassed for replay payloads.
+- Schedule-trigger recovery and cleanup paths are removed.
+- Durable event account/conversation/message identifiers are namespaced before Postgres writes.
+- Postgres nodes are retargeted to a credential named `Bot Postgres Test`.
+- Chat memory uses the `progolf_support_json_test:` namespace.
+
+Regenerate after production workflow changes:
+
+```bash
+npm run workflow:generate-test
+```
+
+> Improvement-loop / eval tooling was moved to branch `docs/testing` (see `ARCHIVE-TESTING.md` there).
 
 ## Scripts
 

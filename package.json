@@ -2,7 +2,7 @@
   "name": "chatwoot-n8n",
   "private": true,
   "scripts": {
-    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs",
+    "test": "node --test tests/workflow-and-logic.test.mjs tests/rag-guided-workflow.test.mjs tests/postgres-workflow.test.mjs tests/v4-workflow.test.mjs tests/pgvector-ingest.test.mjs tests/typing-indicators-workflow.test.mjs tests/player-report-workflow.test.mjs tests/idempotency-debounce.test.mjs tests/error-workflow.test.mjs tests/queue-deployment.test.mjs tests/chatwoot-pgvector-sync.test.mjs tests/support-runtime-contract.test.mjs",
     "workflow:generate-postgres": "node scripts/generate-postgres-workflow.mjs",
     "test:webhook-scenario": "node scripts/run-webhook-scenarios.mjs",
     "rag:upsert": "node --env-file=.env scripts/upsert-rag.mjs",
@@ -13,14 +13,20 @@
     "rag:upsert-pgvector:dry": "node --env-file=.env scripts/upsert-helpshift-pgvector.mjs --dry-run",
     "workflow:patch-pgvector-support-state": "node --env-file=.env scripts/patch-pgvector-support-state.mjs",
     "workflow:patch-typing-indicators": "node --env-file=.env scripts/patch-typing-indicators.mjs",
+    "workflow:patch-explicit-assignee": "node --env-file=.env scripts/patch-explicit-assignee.mjs",
     "workflow:patch-idempotency": "node scripts/patch-idempotency-debounce.mjs",
     "db:migrate-idempotency": "node --env-file=.env scripts/apply-idempotency-migration.mjs",
     "workflow:deploy-v2-via-mcp": "node scripts/generate-v2-workflow-sdk.mjs && node scripts/deploy-v2-via-mcp.mjs",
+    "workflow:validate-prod-hardening": "node scripts/validate-prod-hardening-via-mcp.mjs",
+    "workflow:deploy-prod-hardening": "node scripts/deploy-prod-hardening-via-mcp.mjs",
     "rag:upsert-chatwoot-pgvector": "node --env-file=.env scripts/upsert-chatwoot-pgvector.mjs",
     "rag:upsert-chatwoot-pgvector:dry": "node --env-file=.env scripts/upsert-chatwoot-pgvector.mjs --dry-run",
     "workflow:generate-chatwoot-pgvector-sync": "node scripts/generate-chatwoot-pgvector-sync-workflow.mjs",
     "workflow:deploy-chatwoot-pgvector-sync-via-mcp": "node scripts/generate-chatwoot-pgvector-sync-workflow.mjs && node scripts/deploy-chatwoot-pgvector-sync-via-mcp.mjs",
-    "chatwoot:ensure-labels": "node --env-file=.env scripts/ensure-chatwoot-labels.mjs"
+    "chatwoot:ensure-labels": "node --env-file=.env scripts/ensure-chatwoot-labels.mjs",
+    "factory:start": "node --env-file=.env factory/server.mjs",
+    "factory:test": "node --test tests/bot-factory.test.mjs",
+    "helio:verify-contract": "node scripts/verify-chatwoot-contract.mjs"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.2",
